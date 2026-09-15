@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
-import { authApi, fetchGameState, executeAction } from "./services/api";
+import { fetchGameStateWithUser, executeAction } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
@@ -38,49 +38,47 @@ function FarmGame() {
     gameState,
   } = useGameStore();
 
-  // 1. Telegram App Initialization & Auth
+  // 1. Telegram App Initialization & Local InitData / User Setup
   useEffect(() => {
-  initTelegramApp();
+    initTelegramApp();
 
-  async function initializeAuth() {
-    setAuthLoading(true);
-    // Авторизації через /api/auth немає — user приходить разом зі state
-    // Тому тут ми просто читаємо з Telegram WebApp
-    const tgUser = getTelegramUser();
     const initData = getTelegramInitData();
+    const tgUser = getTelegramUser();
 
-    if (!initData) {
-      setAuthError("Відкрий через Telegram WebApp (кнопка «🎮 Грати» в боті)");
-      return;
-    }
-
-    // chat_id/user_id ми все одно знаємо від Telegram — ставимо їх одразу
     if (tgUser) {
       const name = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username || "Фермер";
-      // chat_id в БД — глобальний, але для UI ми підставляємо user_id; chat_id отримаємо зі state
-      setAuthData(0, tgUser.id, name);
+      setAuthData(tgUser.id, tgUser.id, name);
+    } else if (initData) {
+      setAuthLoading(false);
+    } else {
+      setAuthLoading(false);
+      setAuthError(null);
     }
-  }
+  }, [setAuthData, setAuthLoading, setAuthError]);
 
-  initializeAuth();
-}, []);
+  // 2. Fetch Game State & User Sync via TanStack Query (POST /api/state)
+  const {
+    data: fetchedResult,
+    isLoading: isStateLoading,
+    isFetching,
+    refetch: refetchState,
+  } = useQuery({
+    queryKey: ["gameState"],
+    queryFn: fetchGameStateWithUser,
+    refetchInterval: 5000,
+  });
 
-  // 2. Fetch Game State via TanStack Query (synced with https://vogi.onrender.com)
-  const { data: queryData, isLoading: isStateLoading, isFetching, refetch: refetchState } = useQuery({
-  queryKey: ["gameState"],
-  queryFn: fetchGameState,
-  refetchInterval: 5000,
-});
-
-
-  // Sync state to Zustand store
+  // Sync state and server user info to Zustand store
   useEffect(() => {
-    if (fetchedState) {
-      setGameState(fetchedState);
+    if (fetchedResult?.gameState) {
+      setGameState(fetchedResult.gameState);
     }
-  }, [fetchedState, setGameState]);
+    if (fetchedResult?.user) {
+      setAuthData(fetchedResult.user.id, fetchedResult.user.id, fetchedResult.user.name);
+    }
+  }, [fetchedResult, setGameState, setAuthData]);
 
-  // 3. Action Mutation
+  // 3. Action Mutation (POST /api/action)
   const actionMutation = useMutation({
     mutationFn: async ({ actionName, params }: { actionName: string; params?: Record<string, unknown> }) => {
       return executeAction(actionName, params);
@@ -88,6 +86,9 @@ function FarmGame() {
     onSuccess: (data) => {
       if (data.message) {
         addToast(data.message, "success");
+      }
+      if (data.state) {
+        setGameState(data.state);
       }
       refetchState();
     },

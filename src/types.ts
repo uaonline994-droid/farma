@@ -183,6 +183,7 @@ export interface AuthResponse {
 export interface ActionResponse {
   ok: boolean;
   message: string;
+  state?: GameState;
 }
 
 export type TabType = "farm" | "wheat" | "market" | "shop" | "business" | "casino" | "leaderboard" | "profile";
