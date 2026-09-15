@@ -177,7 +177,10 @@ export interface AuthResponse {
   ok: boolean;
   chat_id: number;
   user_id: number;
+  name?: string;
   user_name?: string;
+  username?: string | null;
+  is_new_player?: boolean;
 }
 
 export interface ActionResponse {
