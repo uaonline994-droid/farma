@@ -40,29 +40,30 @@ function FarmGame() {
 
   // 1. Telegram App Initialization & Auth
   useEffect(() => {
-    initTelegramApp();
+  initTelegramApp();
 
-    async function initializeAuth() {
-      setAuthLoading(true);
-      const initData = getTelegramInitData();
-      const tgUser = getTelegramUser();
+  async function initializeAuth() {
+    setAuthLoading(true);
+    // Авторизації через /api/auth немає — user приходить разом зі state
+    // Тому тут ми просто читаємо з Telegram WebApp
+    const tgUser = getTelegramUser();
+    const initData = getTelegramInitData();
 
-      try {
-        const authRes = await authApi(initData);
-        if (authRes.ok) {
-          const name = tgUser
-            ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username || "Фермер"
-            : authRes.user_name || "Фермер";
-          setAuthData(authRes.chat_id, authRes.user_id, name);
-        }
-      } catch (err: any) {
-        console.warn("Auth initialization:", err);
-        setAuthError(err.message || "Помилка авторизації");
-      }
+    if (!initData) {
+      setAuthError("Відкрий через Telegram WebApp (кнопка «🎮 Грати» в боті)");
+      return;
     }
 
-    initializeAuth();
-  }, []);
+    // chat_id/user_id ми все одно знаємо від Telegram — ставимо їх одразу
+    if (tgUser) {
+      const name = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username || "Фермер";
+      // chat_id в БД — глобальний, але для UI ми підставляємо user_id; chat_id отримаємо зі state
+      setAuthData(0, tgUser.id, name);
+    }
+  }
+
+  initializeAuth();
+}, []);
 
   // 2. Fetch Game State via TanStack Query (synced with https://vogi.onrender.com)
   const {
