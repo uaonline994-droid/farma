@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
-import { fetchGameStateWithUser, executeAction } from "./services/api";
+import { fetchGameStateWithUser, executeAction, authenticateTelegramUser } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
@@ -57,7 +57,30 @@ function FarmGame() {
     }
   }, [setAuthData, setAuthLoading, setAuthError]);
 
-  // 2. Fetch Game State & User Sync via TanStack Query
+  // 2. Explicit Telegram authorization — verifies signed initData on the backend
+  // BEFORE any game data is requested. This is what guarantees the user, balance
+  // and farm are tied to the correct, server-verified Telegram identity the moment
+  // the Mini App opens (not just whatever the client-side WebApp object claims).
+  const {
+    data: authResult,
+    isLoading: isAuthLoading,
+    error: authError2,
+    refetch: refetchAuth,
+  } = useQuery({
+    queryKey: ["telegramAuth"],
+    queryFn: authenticateTelegramUser,
+    retry: 1,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+
+  useEffect(() => {
+    if (authResult) {
+      setAuthData(authResult.chat_id, authResult.user_id, authResult.name);
+    }
+  }, [authResult, setAuthData]);
+
+  // 3. Fetch Game State & User Sync via TanStack Query — only once authorized
   const {
     data: fetchedResult,
     isLoading: isStateLoading,
@@ -68,6 +91,7 @@ function FarmGame() {
     queryKey: ["gameState"],
     queryFn: fetchGameStateWithUser,
     refetchInterval: 5000,
+    enabled: !!authResult,
   });
 
   // Sync state and server user info to Zustand store
@@ -80,7 +104,10 @@ function FarmGame() {
     }
   }, [fetchedResult, setGameState, setAuthData]);
 
-  // 3. Action Mutation (POST /api/action)
+  const blockingError = authError2 || stateError;
+  const isBlockingLoading = isAuthLoading || (isStateLoading && !!authResult);
+
+  // 4. Action Mutation (POST /api/action)
   const actionMutation = useMutation({
     mutationFn: async ({ actionName, params }: { actionName: string; params?: Record<string, unknown> }) => {
       return executeAction(actionName, params);
@@ -113,13 +140,16 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
-        {isStateLoading && !gameState ? (
+        {isBlockingLoading && !gameState ? (
           <SkeletonLoader />
-        ) : stateError && !gameState ? (
+        ) : blockingError && !gameState ? (
           <ErrorState
-            error={stateError as Error}
-            onRetry={() => refetchState()}
-            isRetrying={isFetching}
+            error={blockingError as Error}
+            onRetry={() => {
+              refetchAuth();
+              refetchState();
+            }}
+            isRetrying={isFetching || isAuthLoading}
           />
         ) : (
           <AnimatePresence mode="wait">
