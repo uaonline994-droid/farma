@@ -66,16 +66,12 @@ function FarmGame() {
 }, []);
 
   // 2. Fetch Game State via TanStack Query (synced with https://vogi.onrender.com)
-  const {
-    data: fetchedState,
-    isLoading: isStateLoading,
-    isFetching,
-    refetch: refetchState,
-  } = useQuery({
-    queryKey: ["gameState"],
-    queryFn: fetchGameState,
-    refetchInterval: 5000, // Background sync every 5s for smooth state & timers
-  });
+  const { data: queryData, isLoading: isStateLoading, isFetching, refetch: refetchState } = useQuery({
+  queryKey: ["gameState"],
+  queryFn: fetchGameState,
+  refetchInterval: 5000,
+});
+
 
   // Sync state to Zustand store
   useEffect(() => {
