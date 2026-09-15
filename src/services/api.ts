@@ -41,6 +41,7 @@ function getHeaders(): HeadersInit {
   const initData = getTelegramInitData();
   const savedId = getSavedTelegramId();
   const savedName = getSavedTelegramName();
+  const tgUser = getTelegramUser();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -50,12 +51,19 @@ function getHeaders(): HeadersInit {
     headers["X-Telegram-Init-Data"] = initData;
     headers["X-Init-Data"] = initData;
   }
-  if (savedId) {
-    headers["X-Telegram-User-Id"] = savedId;
+
+  const userId = savedId || (tgUser ? String(tgUser.id) : null);
+  if (userId) {
+    headers["X-Telegram-User-Id"] = userId;
   }
-  if (savedName) {
-    headers["X-Telegram-User-Name"] = encodeURIComponent(savedName);
+
+  const userName =
+    savedName ||
+    (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username : null);
+  if (userName) {
+    headers["X-Telegram-User-Name"] = encodeURIComponent(userName);
   }
+
   return headers;
 }
 
@@ -277,13 +285,24 @@ export interface FetchGameStateResult {
   };
 }
 
-export async function fetchGameState(): Promise<GameState> {
+async function requestState(): Promise<any> {
   const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/state`, {
+  const headers = getHeaders();
+
+  // Try POST /api/state first (if server supports POST)
+  let res = await fetch(`${baseUrl}/api/state`, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify({}),
-  });
+  }).catch(() => null);
+
+  // If 405 Method Not Allowed or network failure, fallback to GET /api/state
+  if (!res || res.status === 405) {
+    res = await fetch(`${baseUrl}/api/state`, {
+      method: "GET",
+      headers,
+    });
+  }
 
   if (res.status === 401) {
     throw new ApiError("Помилка авторизації Telegram (недійсний initData)", 401);
@@ -298,29 +317,17 @@ export async function fetchGameState(): Promise<GameState> {
     throw new ApiError(errData.error || `Помилка отримання даних: HTTP ${res.status}`, res.status);
   }
 
-  const data = await res.json();
+  return res.json();
+}
+
+export async function fetchGameState(): Promise<GameState> {
+  const data = await requestState();
   const rawState = data?.state || data;
   return transformPythonResponseToGameState(rawState);
 }
 
 export async function fetchGameStateWithUser(): Promise<FetchGameStateResult> {
-  const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/state`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({}),
-  });
-
-  if (res.status === 401) {
-    throw new ApiError("Помилка авторизації Telegram (недійсний initData)", 401);
-  }
-
-  if (!res.ok) {
-    const errData = await res.json().catch(() => ({}));
-    throw new ApiError(errData.error || `Помилка отримання даних: HTTP ${res.status}`, res.status);
-  }
-
-  const data = await res.json();
+  const data = await requestState();
   const rawState = data?.state || data;
   return {
     gameState: transformPythonResponseToGameState(rawState),
@@ -431,11 +438,21 @@ export async function executeAction(
 
 export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
   const baseUrl = getBaseUrl();
-  const res = await fetch(`${baseUrl}/api/leaderboard`, {
+  const headers = getHeaders();
+
+  // Try POST /api/leaderboard then fallback to GET if 405
+  let res = await fetch(`${baseUrl}/api/leaderboard`, {
     method: "POST",
-    headers: getHeaders(),
+    headers,
     body: JSON.stringify({}),
-  });
+  }).catch(() => null);
+
+  if (!res || res.status === 405) {
+    res = await fetch(`${baseUrl}/api/leaderboard`, {
+      method: "GET",
+      headers,
+    });
+  }
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

@@ -7,6 +7,7 @@ import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { SkeletonLoader } from "./components/ui/SkeletonLoader";
+import { ErrorState } from "./components/ui/ErrorState";
 import { FarmCanvas } from "./components/farm/FarmCanvas";
 import { WheatFieldView } from "./components/wheat/WheatFieldView";
 import { MarketView } from "./components/market/MarketView";
@@ -56,11 +57,12 @@ function FarmGame() {
     }
   }, [setAuthData, setAuthLoading, setAuthError]);
 
-  // 2. Fetch Game State & User Sync via TanStack Query (POST /api/state)
+  // 2. Fetch Game State & User Sync via TanStack Query
   const {
     data: fetchedResult,
     isLoading: isStateLoading,
     isFetching,
+    error: stateError,
     refetch: refetchState,
   } = useQuery({
     queryKey: ["gameState"],
@@ -113,6 +115,12 @@ function FarmGame() {
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
         {isStateLoading && !gameState ? (
           <SkeletonLoader />
+        ) : stateError && !gameState ? (
+          <ErrorState
+            error={stateError as Error}
+            onRetry={() => refetchState()}
+            isRetrying={isFetching}
+          />
         ) : (
           <AnimatePresence mode="wait">
             <motion.div
