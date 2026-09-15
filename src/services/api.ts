@@ -76,6 +76,49 @@ export class ApiError extends Error {
   }
 }
 
+export interface TelegramAuthResult {
+  ok: boolean;
+  chat_id: number;
+  user_id: number;
+  name: string;
+  username?: string | null;
+  is_new_player: boolean;
+}
+
+// Явно авторизує користувача Telegram Mini App на бекенді за підписаним initData.
+// Викликається одразу при відкритті веб-апки, до будь-яких інших запитів — це
+// гарантує, що бекенд зареєстрував гравця (і видав стартовий набір, якщо він новий)
+// ще до першого рендера ферми.
+export async function authenticateTelegramUser(): Promise<TelegramAuthResult> {
+  const initData = getTelegramInitData();
+  if (!initData) {
+    throw new ApiError(
+      "Цей застосунок потрібно відкривати кнопкою «Натисніть кнопку грати» в Telegram, а не напряму в браузері.",
+      401
+    );
+  }
+
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/auth`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ initData }),
+  });
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || `Помилка авторизації: HTTP ${res.status}`, res.status);
+  }
+
+  const data = await res.json();
+  if (data?.user_id) {
+    // Кешуємо підтверджені бекендом дані — корисно як фолбек для заголовків
+    // подальших запитів (наприклад, якщо initData стане недоступним).
+    saveTelegramCredentials(data.user_id, data.name);
+  }
+  return data;
+}
+
 // Adapts Python bot state to React GameState
 export function transformPythonResponseToGameState(rawState: any): GameState {
   const state = rawState || {};
