@@ -7,6 +7,7 @@ import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { SkeletonLoader } from "./components/ui/SkeletonLoader";
+import { ApiStatusBanner } from "./components/ui/ApiStatusBanner";
 import { FarmCanvas } from "./components/farm/FarmCanvas";
 import { WheatFieldView } from "./components/wheat/WheatFieldView";
 import { MarketView } from "./components/market/MarketView";
@@ -20,6 +21,7 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       refetchOnWindowFocus: true,
+      retry: 2,
       staleTime: 2000,
     },
   },
@@ -68,6 +70,7 @@ function FarmGame() {
     data: fetchedState,
     isLoading: isStateLoading,
     isFetching,
+    error: stateError,
     refetch: refetchState,
   } = useQuery({
     queryKey: ["gameState"],
@@ -102,6 +105,9 @@ function FarmGame() {
     await actionMutation.mutateAsync({ actionName, params });
   };
 
+  const isError = Boolean(stateError);
+  const errorMessage = stateError ? (stateError as Error).message : null;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1c381f] via-[#244527] to-[#172c19] text-amber-50 flex flex-col justify-between selection:bg-amber-400 selection:text-amber-950 font-['Nunito']">
       {/* Top Header */}
@@ -112,6 +118,14 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
+        {/* API connection warning if disconnected */}
+        <ApiStatusBanner
+          isError={isError}
+          errorMessage={errorMessage}
+          onRetry={() => refetchState()}
+          isLoading={isFetching}
+        />
+
         {isStateLoading && !gameState ? (
           <SkeletonLoader />
         ) : (

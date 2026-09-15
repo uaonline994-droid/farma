@@ -1,6 +1,23 @@
 import { getTelegramInitData, getTelegramUser } from "./telegram";
-import { AuthResponse, GameState, ActionResponse, LeaderboardResponse } from "../types";
+import { AuthResponse, GameState, ActionResponse, LeaderboardResponse, LeaderboardEntry } from "../types";
 import { getLocalState, executeLocalAction, saveLocalState, createInitialLocalState } from "./localEngine";
+
+export function checkAndExtractQueryBackendUrl(): string | null {
+  if (typeof window !== "undefined") {
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const apiParam = urlParams.get("api") || urlParams.get("backend") || urlParams.get("server");
+      if (apiParam && apiParam.trim()) {
+        const clean = apiParam.trim().replace(/\/$/, "");
+        localStorage.setItem("farmer_custom_backend_url", clean);
+        return clean;
+      }
+    } catch (e) {
+      console.warn("Failed to parse query backend url", e);
+    }
+  }
+  return null;
+}
 
 export function getSavedTelegramId(): string | null {
   if (typeof window !== "undefined") {
@@ -18,6 +35,7 @@ export function getSavedTelegramName(): string | null {
 
 export function getCustomBackendUrl(): string {
   if (typeof window !== "undefined") {
+    checkAndExtractQueryBackendUrl();
     const saved = localStorage.getItem("farmer_custom_backend_url");
     if (saved) return saved.replace(/\/$/, "");
   }
@@ -27,7 +45,7 @@ export function getCustomBackendUrl(): string {
 export function setCustomBackendUrl(url: string) {
   if (typeof window !== "undefined") {
     if (url.trim()) {
-      localStorage.setItem("farmer_custom_backend_url", url.trim());
+      localStorage.setItem("farmer_custom_backend_url", url.trim().replace(/\/$/, ""));
     } else {
       localStorage.removeItem("farmer_custom_backend_url");
     }
@@ -50,7 +68,7 @@ export function clearTelegramCredentials() {
   }
 }
 
-function getBaseUrl(): string {
+export function getBaseUrl(): string {
   const custom = getCustomBackendUrl();
   if (custom) return custom;
   if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) {
@@ -88,7 +106,7 @@ export class ApiError extends Error {
   }
 }
 
-// Adapts Python bot's _serialize_farm_state to React GameState
+// Adapts Python bot's _serialize_farm_state directly to React GameState
 export function transformPythonResponseToGameState(data: any): GameState {
   if (!data || typeof data !== "object") {
     return getLocalState();
@@ -103,14 +121,14 @@ export function transformPythonResponseToGameState(data: any): GameState {
 
   const now = Date.now();
 
-  // 1. Potato calculation
+  // 1. Potato calculation from Python SQLite
   let potatoPlantedAt = 0;
   if (rawFarm.planted_at) {
     const pDate = new Date(rawFarm.planted_at).getTime();
     if (!isNaN(pDate)) potatoPlantedAt = pDate;
   }
   const potatoPlantedCount = rawFarm.planted_count || 0;
-  const potatoDuration = 7200; // 2 hours in seconds
+  const potatoDuration = 7200; // 2 hours
   let potatoProgress = 0;
   let potatoReady = false;
   let potatoSecondsLeft = 0;
@@ -121,15 +139,15 @@ export function transformPythonResponseToGameState(data: any): GameState {
     potatoSecondsLeft = Math.max(0, Math.round(potatoDuration - elapsed));
   }
 
-  // 2. Wheat plots
-  const plotCount = rawWheat.plots || 1;
+  // 2. Wheat plots from Python SQLite
+  const plotCount = rawWheat.plots || 0;
   let wheatPlantedAt = 0;
   if (rawWheat.planted_at) {
     const wDate = new Date(rawWheat.planted_at).getTime();
     if (!isNaN(wDate)) wheatPlantedAt = wDate;
   }
   const wheatPlantedCount = rawWheat.planted_count || 0;
-  const wheatDuration = 14400; // 4 hours in seconds
+  const wheatDuration = 14400; // 4 hours
 
   const wheatPlots = Array.from({ length: 16 }, (_, i) => {
     const id = i + 1;
@@ -150,14 +168,14 @@ export function transformPythonResponseToGameState(data: any): GameState {
     return {
       id,
       planted_at: isPlanted ? wheatPlantedAt : 0,
-      duration: 45, // visual display duration
+      duration: 45,
       stage,
       ready,
       progress,
     };
   });
 
-  // 3. Contracts
+  // 3. Contracts from Python SQLite
   const contracts = [];
   if (rawContract) {
     contracts.push({
@@ -170,30 +188,6 @@ export function transformPythonResponseToGameState(data: any): GameState {
       reward_xp: 100,
       fulfilled: false,
     });
-  } else {
-    // Default contracts if none
-    contracts.push(
-      {
-        id: "c1",
-        title: "Постачання в пекарню 'Колосок'",
-        description: "Потрібно 10 снопів пшениці для свіжого хліба",
-        req_item: "wheat",
-        req_count: 10,
-        reward_coins: 250,
-        reward_xp: 80,
-        fulfilled: false,
-      },
-      {
-        id: "c2",
-        title: "Сніданки для кафе 'Затишок'",
-        description: "Замовлення на 8 свіжих фермерських яєць",
-        req_item: "egg",
-        req_count: 8,
-        reward_coins: 140,
-        reward_xp: 60,
-        fulfilled: false,
-      }
-    );
   }
 
   // 4. XP Calculation
@@ -215,7 +209,7 @@ export function transformPythonResponseToGameState(data: any): GameState {
         planted_at: potatoPlantedAt,
         growth_duration: potatoDuration,
         count: rawFarm.potato || 0,
-        max_count: 500,
+        max_count: 5000,
         ready: potatoReady,
         growth_progress: potatoProgress,
         seconds_left: potatoSecondsLeft,
@@ -225,7 +219,7 @@ export function transformPythonResponseToGameState(data: any): GameState {
         chicks: rawFarm.chicks || 0,
         roosters: rawFarm.roosters || 0,
         eggs: rawFarm.eggs || 0,
-        max_capacity: 500,
+        max_capacity: 5000,
         feed_level: 100,
         last_feed_time: now,
       },
@@ -252,11 +246,11 @@ export function transformPythonResponseToGameState(data: any): GameState {
       },
     },
     economy: {
-      balance: typeof rawEcon.balance === "number" ? rawEcon.balance : 15000,
+      balance: typeof rawEcon.balance === "number" ? rawEcon.balance : 0,
       gems: 0,
       storage: {
-        used: (rawFarm.eggs || 0) + (rawFarm.milk || 0) + (rawFarm.meat || 0) + (rawFarm.potato || 0),
-        max: 5000,
+        used: (rawFarm.eggs || 0) + (rawFarm.milk || 0) + (rawFarm.meat || 0) + (rawFarm.potato || 0) + (rawFarm.lard || 0) + (rawFarm.cheese || 0),
+        max: 10000,
       },
       prices: {
         potato: 70,
@@ -317,7 +311,8 @@ export async function authApi(
     (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username : "Фермер");
 
   try {
-    const res = await fetch(`${getBaseUrl()}/api/auth`, {
+    const baseUrl = getBaseUrl();
+    const res = await fetch(`${baseUrl}/api/auth`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -330,6 +325,11 @@ export async function authApi(
       }),
     });
 
+    const contentType = res.headers.get("content-type") || "";
+    if (contentType.includes("text/html")) {
+      throw new ApiError("Бекенд не знайдено за цією адресою (повернуто HTML замість JSON API)", 404);
+    }
+
     if (res.ok) {
       const data = await res.json();
       return {
@@ -338,41 +338,48 @@ export async function authApi(
         chat_id: data.chat_id || Number(savedId),
         user_name: data.name || String(savedName),
       };
+    } else {
+      const errData = await res.json().catch(() => ({}));
+      throw new ApiError(errData.error || `Помилка сервера: HTTP ${res.status}`, res.status);
     }
-  } catch (e) {
-    console.warn("Backend auth offline, using local session:", e);
+  } catch (e: any) {
+    console.warn("Backend auth error:", e);
+    throw e;
   }
-
-  // Fallback to local session
-  return {
-    ok: true,
-    user_id: Number(savedId) || 1001,
-    chat_id: Number(savedId) || 1001,
-    user_name: String(savedName),
-  };
 }
 
 export async function fetchGameState(): Promise<GameState> {
-  try {
-    const res = await fetch(`${getBaseUrl()}/api/state`, {
-      method: "GET",
-      headers: getHeaders(),
-    });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/state`, {
+    method: "GET",
+    headers: getHeaders(),
+  });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data && (data.farm || data.wheat || data.economy)) {
-        const transformed = transformPythonResponseToGameState(data);
-        saveLocalState(transformed);
-        return transformed;
-      }
-    }
-  } catch (e) {
-    console.warn("Backend /api/state not reachable, loading local state:", e);
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw new ApiError(
+      "Запит на /api/state повернув веб-сторінку замість JSON. Вкажіть URL вашого Python API у вкладці 'Профіль' або параметром ?api=http://IP:8080",
+      404
+    );
   }
 
-  // Fallback: return working local state so the app never hangs
-  return getLocalState();
+  if (res.status === 401) {
+    throw new ApiError("Помилка авторизації Telegram (недійсний initData)", 401);
+  }
+
+  if (res.status === 503) {
+    throw new ApiError("Бот ще не налаштований у групі (напишіть /settopic у групі)", 503);
+  }
+
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || `Помилка отримання даних: HTTP ${res.status}`, res.status);
+  }
+
+  const data = await res.json();
+  const transformed = transformPythonResponseToGameState(data);
+  saveLocalState(transformed);
+  return transformed;
 }
 
 export async function executeAction(actionName: string, params: Record<string, unknown> = {}): Promise<ActionResponse> {
@@ -423,72 +430,64 @@ export async function executeAction(actionName: string, params: Record<string, u
     pythonPayload.count = Number(params.count) || 1;
   }
 
-  try {
-    const res = await fetch(`${getBaseUrl()}/api/action`, {
-      method: "POST",
-      headers: getHeaders(),
-      body: JSON.stringify({
-        action: pythonAction,
-        ...pythonPayload,
-      }),
-    });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/action`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({
+      action: pythonAction,
+      ...pythonPayload,
+    }),
+  });
 
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        ok: true,
-        message: data.message || "Дію успішно виконано!",
-      };
-    }
-  } catch (e) {
-    console.warn("Backend /api/action offline, executing in local engine:", e);
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw new ApiError("Бекенд не відповідає на дію (отримано HTML замість API)", 404);
   }
 
-  // Fallback: execute locally and save
-  return executeLocalAction(actionName, params);
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || errData.message || `Помилка дії: HTTP ${res.status}`, res.status);
+  }
+
+  const data = await res.json();
+  return {
+    ok: true,
+    message: data.message || "Дію успішно виконано!",
+  };
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
-  try {
-    const res = await fetch(`${getBaseUrl()}/api/leaderboard`, {
-      method: "GET",
-      headers: getHeaders(),
-    });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/leaderboard`, {
+    method: "GET",
+    headers: getHeaders(),
+  });
 
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.leaderboard)) {
-        return {
-          leaderboard: data.leaderboard.map((item: any, idx: number) => ({
-            user_id: item.user_id,
-            name: item.name,
-            balance: item.balance,
-            rank: idx + 1,
-            tag: item.level_name,
-          })),
-        };
-      }
-    }
-  } catch (e) {
-    console.warn("Backend /api/leaderboard offline, using local mock leaderboard:", e);
+  const contentType = res.headers.get("content-type") || "";
+  if (contentType.includes("text/html")) {
+    throw new ApiError("Не вдалося завантажити рейтинг з сервера бота (отримано HTML)", 404);
   }
 
-  const localState = getLocalState();
-  const currentId = Number(getSavedTelegramId()) || 1001;
-  const currentName = getSavedTelegramName() || "Фермер";
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || `Помилка рейтингу: HTTP ${res.status}`, res.status);
+  }
 
-  return {
-    leaderboard: [
-      { user_id: 101, name: "Олександр 'Трактор' 🇺🇦", balance: 148500, rank: 1, tag: "Агро-Олігарх" },
-      { user_id: 102, name: "Марія Степанівна", balance: 94200, rank: 2, tag: "Королева Сиру 🧀" },
-      { user_id: 103, name: "Богдан Подільський", balance: 78100, rank: 3, tag: "Майстер Пшениці 🌾" },
-      { user_id: 104, name: "Андрій Квітучий", balance: 52400, rank: 4, tag: "Агроном Полісся" },
-      { user_id: 105, name: "Катерина Садова", balance: 41800, rank: 5, tag: "Птаховод Року 🪶" },
-      { user_id: currentId, name: `${currentName} (Ви)`, balance: localState.economy.balance, rank: 6, tag: localState.tag, isSelf: true },
-      { user_id: 106, name: "Ярослав Мудрий Фермер", balance: 32900, rank: 7, tag: "Тваринник" },
-      { user_id: 107, name: "Іван Карпатський", balance: 24700, rank: 8, tag: "Досвідчений" },
-      { user_id: 108, name: "Олена Сонячна", balance: 18500, rank: 9, tag: "Господиня" },
-      { user_id: 109, name: "Віталій Полігон", balance: 9600, rank: 10, tag: "Новачок" },
-    ],
-  };
+  const data = await res.json();
+  if (data && Array.isArray(data.leaderboard)) {
+    const currentId = Number(getSavedTelegramId()) || (getTelegramUser() ? getTelegramUser()?.id : 0);
+    return {
+      leaderboard: data.leaderboard.map((item: any, idx: number) => ({
+        user_id: item.user_id,
+        name: item.name || `Гравець ${item.user_id}`,
+        balance: item.balance || 0,
+        rank: idx + 1,
+        tag: item.level_name || (item.level ? `Рівень ${item.level}` : undefined),
+        isSelf: currentId > 0 && item.user_id === currentId,
+      })),
+    };
+  }
+
+  return { leaderboard: [] };
 }
