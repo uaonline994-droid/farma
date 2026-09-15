@@ -2,7 +2,8 @@ import React, { useState } from "react";
 import { useGameStore } from "../../store/gameStore";
 import { Award, CheckCircle2, Coins, Send, KeyRound, Check, Copy } from "lucide-react";
 import { triggerHaptic, isTelegramEnv } from "../../services/telegram";
-import { saveTelegramCredentials, clearTelegramCredentials, getSavedTelegramId, getSavedTelegramName } from "../../services/api";
+import { saveTelegramCredentials, clearTelegramCredentials, getSavedTelegramId, getSavedTelegramName, getCustomBackendUrl, setCustomBackendUrl } from "../../services/api";
+import { Server } from "lucide-react";
 
 export const ProfileView: React.FC = () => {
   const { gameState, userId, userName } = useGameStore();
@@ -13,6 +14,8 @@ export const ProfileView: React.FC = () => {
   const [customNameInput, setCustomNameInput] = useState(getSavedTelegramName() || userName || "");
   const [isEditingAccount, setIsEditingAccount] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [backendUrlInput, setBackendUrlInput] = useState(getCustomBackendUrl());
+  const [isBackendSaved, setIsBackendSaved] = useState(false);
 
   if (!gameState) return null;
 
@@ -52,6 +55,16 @@ export const ProfileView: React.FC = () => {
     navigator.clipboard.writeText(window.location.origin);
     setCopiedLink(true);
     setTimeout(() => setCopiedLink(false), 2000);
+  };
+
+  const handleSaveBackendUrl = () => {
+    triggerHaptic("success");
+    setCustomBackendUrl(backendUrlInput);
+    setIsBackendSaved(true);
+    setTimeout(() => {
+      setIsBackendSaved(false);
+      window.location.reload();
+    }, 800);
   };
 
   return (
@@ -221,6 +234,33 @@ export const ProfileView: React.FC = () => {
           <div className="font-mono text-[10px] text-amber-200 bg-[#0c180e] p-1.5 rounded">
             InlineKeyboardButton(text="🌾 Відкрити ферму", web_app=WebAppInfo(url="{window.location.origin}"))
           </div>
+        </div>
+      </div>
+
+      {/* Backend API connection settings */}
+      <div className="bg-[#18311a] rounded-3xl p-4 border-2 border-emerald-800 flex flex-col gap-2.5 text-xs text-emerald-200">
+        <h3 className="font-['Fredoka'] font-bold text-sm text-yellow-300 flex items-center gap-1.5">
+          <Server className="w-4 h-4 text-emerald-400" />
+          Підключення до Python / HTTP API:
+        </h3>
+        <p className="text-[11px] text-emerald-300/90 leading-relaxed">
+          Якщо ваш Python бот / aiohttp бекенд розгорнуто на окремому сервері або порту, вкажіть його адресу нижче (за замовчуванням використовуються відносні запити <code>/api</code> або вбудований офлайн-движок):
+        </p>
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={backendUrlInput}
+            onChange={(e) => setBackendUrlInput(e.target.value)}
+            placeholder="наприклад: https://api.myfarm.com (або пусто)"
+            className="flex-1 bg-[#102212] border border-emerald-700 rounded-xl px-2.5 py-1.5 text-xs text-amber-100 placeholder:text-emerald-700 focus:outline-none focus:border-amber-400"
+          />
+          <button
+            onClick={handleSaveBackendUrl}
+            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold text-xs rounded-xl shadow transition-all shrink-0 flex items-center gap-1"
+          >
+            {isBackendSaved ? <Check className="w-3.5 h-3.5 text-emerald-950" /> : null}
+            {isBackendSaved ? "Збережено" : "Зберегти API"}
+          </button>
         </div>
       </div>
 

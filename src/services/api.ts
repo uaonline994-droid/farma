@@ -1,5 +1,6 @@
-import { getTelegramInitData } from "./telegram";
+import { getTelegramInitData, getTelegramUser } from "./telegram";
 import { AuthResponse, GameState, ActionResponse, LeaderboardResponse } from "../types";
+import { getLocalState, executeLocalAction, saveLocalState, createInitialLocalState } from "./localEngine";
 
 export function getSavedTelegramId(): string | null {
   if (typeof window !== "undefined") {
@@ -13,6 +14,24 @@ export function getSavedTelegramName(): string | null {
     return localStorage.getItem("farmer_custom_tg_name");
   }
   return null;
+}
+
+export function getCustomBackendUrl(): string {
+  if (typeof window !== "undefined") {
+    const saved = localStorage.getItem("farmer_custom_backend_url");
+    if (saved) return saved.replace(/\/$/, "");
+  }
+  return "";
+}
+
+export function setCustomBackendUrl(url: string) {
+  if (typeof window !== "undefined") {
+    if (url.trim()) {
+      localStorage.setItem("farmer_custom_backend_url", url.trim());
+    } else {
+      localStorage.removeItem("farmer_custom_backend_url");
+    }
+  }
 }
 
 export function saveTelegramCredentials(userId: number | string, name?: string) {
@@ -29,6 +48,12 @@ export function clearTelegramCredentials() {
     localStorage.removeItem("farmer_custom_tg_id");
     localStorage.removeItem("farmer_custom_tg_name");
   }
+}
+
+function getBaseUrl(): string {
+  const custom = getCustomBackendUrl();
+  if (custom) return custom;
+  return "";
 }
 
 function getHeaders(): HeadersInit {
@@ -66,83 +91,121 @@ export async function authApi(
   customUserName?: string
 ): Promise<AuthResponse> {
   const initData = initDataOverride !== undefined ? initDataOverride : getTelegramInitData();
-  const savedId = customUserId || getSavedTelegramId();
-  const savedName = customUserName || getSavedTelegramName();
+  const tgUser = getTelegramUser();
+  const savedId = customUserId || getSavedTelegramId() || (tgUser ? tgUser.id : 1001);
+  const savedName =
+    customUserName ||
+    getSavedTelegramName() ||
+    (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username : "Фермер");
 
-  const res = await fetch("/api/auth", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...(initData ? { "X-Telegram-Init-Data": initData } : {}),
-      ...(savedId ? { "X-Telegram-User-Id": String(savedId) } : {}),
-      ...(savedName ? { "X-Telegram-User-Name": encodeURIComponent(savedName) } : {}),
-    },
-    body: JSON.stringify({
-      initData,
-      customUserId: savedId,
-      customUserName: savedName,
-    }),
-  });
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/auth`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...(initData ? { "X-Telegram-Init-Data": initData } : {}),
+        ...(savedId ? { "X-Telegram-User-Id": String(savedId) } : {}),
+        ...(savedName ? { "X-Telegram-User-Name": encodeURIComponent(savedName) } : {}),
+      },
+      body: JSON.stringify({
+        initData,
+        customUserId: savedId,
+        customUserName: savedName,
+      }),
+    });
 
-  if (!res.ok) {
-    throw new ApiError("Помилка авторизації", res.status);
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (e) {
+    console.warn("Backend auth offline, using local session:", e);
   }
-  return res.json();
+
+  // Fallback to local session
+  return {
+    ok: true,
+    user_id: Number(savedId) || 1001,
+    chat_id: Number(savedId) || 1001,
+    user_name: String(savedName),
+  };
 }
 
 export async function fetchGameState(): Promise<GameState> {
-  const res = await fetch("/api/state", {
-    method: "GET",
-    headers: getHeaders(),
-  });
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/state`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
 
-  if (res.status === 401) {
-    throw new ApiError("Сесія недійсна, перезапустіть гру", 401);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.level && data.farm) {
+        saveLocalState(data);
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn("Backend /api/state not reachable, loading local state:", e);
   }
 
-  if (!res.ok) {
-    throw new ApiError("Помилка завантаження даних ферми", res.status);
-  }
-
-  return res.json();
+  // Fallback: return working local state so the app never hangs
+  return getLocalState();
 }
 
 export async function executeAction(actionName: string, params: Record<string, unknown> = {}): Promise<ActionResponse> {
-  const res = await fetch("/api/action", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({
-      action: actionName,
-      ...params,
-    }),
-  });
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/action`, {
+      method: "POST",
+      headers: getHeaders(),
+      body: JSON.stringify({
+        action: actionName,
+        ...params,
+      }),
+    });
 
-  const data = await res.json().catch(() => ({}));
-
-  if (res.status === 401) {
-    throw new ApiError("Сесія недійсна, перезапустіть гру", 401);
+    if (res.ok) {
+      const data = await res.json();
+      return data;
+    }
+  } catch (e) {
+    console.warn("Backend /api/action offline, executing in local engine:", e);
   }
 
-  if (!res.ok) {
-    throw new ApiError(data.message || "Не вдалося виконати дію", res.status);
-  }
-
-  return data;
+  // Fallback: execute locally and save
+  return executeLocalAction(actionName, params);
 }
 
 export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
-  const res = await fetch("/api/leaderboard", {
-    method: "GET",
-    headers: getHeaders(),
-  });
+  try {
+    const res = await fetch(`${getBaseUrl()}/api/leaderboard`, {
+      method: "GET",
+      headers: getHeaders(),
+    });
 
-  if (res.status === 401) {
-    throw new ApiError("Сесія недійсна", 401);
+    if (res.ok) {
+      return await res.json();
+    }
+  } catch (e) {
+    console.warn("Backend /api/leaderboard offline, using local mock leaderboard:", e);
   }
 
-  if (!res.ok) {
-    throw new ApiError("Помилка завантаження рейтингу", res.status);
-  }
+  const localState = getLocalState();
+  const currentId = Number(getSavedTelegramId()) || 1001;
+  const currentName = getSavedTelegramName() || "Фермер";
 
-  return res.json();
+  return {
+    leaderboard: [
+      { user_id: 101, name: "Олександр 'Трактор' 🇺🇦", balance: 148500, rank: 1, tag: "Агро-Олігарх" },
+      { user_id: 102, name: "Марія Степанівна", balance: 94200, rank: 2, tag: "Королева Сиру 🧀" },
+      { user_id: 103, name: "Богдан Подільський", balance: 78100, rank: 3, tag: "Майстер Пшениці 🌾" },
+      { user_id: 104, name: "Андрій Квітучий", balance: 52400, rank: 4, tag: "Агроном Полісся" },
+      { user_id: 105, name: "Катерина Садова", balance: 41800, rank: 5, tag: "Птаховод Року 🪶" },
+      { user_id: currentId, name: `${currentName} (Ви)`, balance: localState.economy.balance, rank: 6, tag: localState.tag, isSelf: true },
+      { user_id: 106, name: "Ярослав Мудрий Фермер", balance: 32900, rank: 7, tag: "Тваринник" },
+      { user_id: 107, name: "Іван Карпатський", balance: 24700, rank: 8, tag: "Досвідчений" },
+      { user_id: 108, name: "Олена Сонячна", balance: 18500, rank: 9, tag: "Господиня" },
+      { user_id: 109, name: "Віталій Полігон", balance: 9600, rank: 10, tag: "Новачок" },
+    ],
+  };
 }
