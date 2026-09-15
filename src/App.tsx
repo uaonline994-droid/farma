@@ -1,0 +1,160 @@
+import React, { useEffect, useState } from "react";
+import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { initTelegramApp, getTelegramInitData, getTelegramUser, isTelegramEnv, triggerHaptic } from "./services/telegram";
+import { authApi, fetchGameState, executeAction, ApiError } from "./services/api";
+import { useGameStore } from "./store/gameStore";
+import { Header } from "./components/ui/Header";
+import { BottomNav } from "./components/ui/BottomNav";
+import { ToastContainer } from "./components/ui/ToastContainer";
+import { SkeletonLoader } from "./components/ui/SkeletonLoader";
+import { FarmCanvas } from "./components/farm/FarmCanvas";
+import { WheatFieldView } from "./components/wheat/WheatFieldView";
+import { MarketView } from "./components/market/MarketView";
+import { ShopView } from "./components/shop/ShopView";
+import { BusinessView } from "./components/business/BusinessView";
+import { LeaderboardView } from "./components/leaderboard/LeaderboardView";
+import { ProfileView } from "./components/profile/ProfileView";
+import { motion, AnimatePresence } from "motion/react";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      refetchOnWindowFocus: true,
+      staleTime: 2000,
+    },
+  },
+});
+
+function FarmGame() {
+  const {
+    activeTab,
+    setAuthData,
+    setAuthLoading,
+    setAuthError,
+    isAuthenticated,
+    setGameState,
+    addToast,
+    gameState,
+  } = useGameStore();
+
+  // 1. Telegram App Initialization & Auth
+  useEffect(() => {
+    initTelegramApp();
+
+    async function initializeAuth() {
+      setAuthLoading(true);
+      const initData = getTelegramInitData();
+      const tgUser = getTelegramUser();
+
+      try {
+        const authRes = await authApi(initData);
+        if (authRes.ok) {
+          const name = tgUser
+            ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username || "Фермер"
+            : authRes.user_name || "Фермер";
+          setAuthData(authRes.chat_id, authRes.user_id, name);
+        }
+      } catch (err: any) {
+        console.warn("Auth initialization:", err);
+        setAuthError(err.message || "Помилка авторизації");
+      }
+    }
+
+    initializeAuth();
+  }, []);
+
+  // 2. Fetch Game State via TanStack Query
+  const {
+    data: fetchedState,
+    isLoading: isStateLoading,
+    isFetching,
+    refetch: refetchState,
+  } = useQuery({
+    queryKey: ["gameState"],
+    queryFn: fetchGameState,
+    refetchInterval: 5000, // Background sync every 5s for smooth timers
+  });
+
+  // Sync state to Zustand
+  useEffect(() => {
+    if (fetchedState) {
+      setGameState(fetchedState);
+    }
+  }, [fetchedState, setGameState]);
+
+  // 3. Action Mutation
+  const actionMutation = useMutation({
+    mutationFn: async ({ actionName, params }: { actionName: string; params?: Record<string, unknown> }) => {
+      return executeAction(actionName, params);
+    },
+    onSuccess: (data) => {
+      if (data.message) {
+        addToast(data.message, "success");
+      }
+      refetchState();
+    },
+    onError: (err: any) => {
+      addToast(err.message || "Помилка при виконанні дії", "warning");
+    },
+  });
+
+  const handleAction = async (actionName: string, params?: Record<string, unknown>) => {
+    await actionMutation.mutateAsync({ actionName, params });
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-to-b from-[#1c381f] via-[#244527] to-[#172c19] text-amber-50 flex flex-col justify-between selection:bg-amber-400 selection:text-amber-950 font-['Nunito']">
+      {/* Top Header */}
+      <Header onRefresh={() => refetchState()} isRefreshing={isFetching} />
+
+      {/* Floating Action Toasts */}
+      <ToastContainer />
+
+      {/* Main Content Area */}
+      <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
+        {isStateLoading && !gameState ? (
+          <SkeletonLoader />
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.18, ease: "easeOut" }}
+            >
+              {activeTab === "farm" && (
+                <FarmCanvas onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "wheat" && (
+                <WheatFieldView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "market" && (
+                <MarketView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "shop" && (
+                <ShopView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "business" && (
+                <BusinessView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "leaderboard" && <LeaderboardView />}
+              {activeTab === "profile" && <ProfileView />}
+            </motion.div>
+          </AnimatePresence>
+        )}
+      </main>
+
+      {/* Bottom Sticky Navigation */}
+      <BottomNav />
+    </div>
+  );
+}
+
+export default function App() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <FarmGame />
+    </QueryClientProvider>
+  );
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Ферма А-11",
+  "description": "Telegram Mini App затишної фермерської 2D-гри: вирощування врожаю, догляд за тваринами, ринок та лідерборд",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
