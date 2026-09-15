@@ -1,21 +1,12 @@
-import React, { useState } from "react";
+import React from "react";
 import { useGameStore } from "../../store/gameStore";
-import { Award, CheckCircle2, Coins, Send, KeyRound, Check, Copy } from "lucide-react";
+import { Award, CheckCircle2, Coins, Send, Trophy, Sprout } from "lucide-react";
 import { triggerHaptic, isTelegramEnv } from "../../services/telegram";
-import { saveTelegramCredentials, clearTelegramCredentials, getSavedTelegramId, getSavedTelegramName, getCustomBackendUrl, setCustomBackendUrl } from "../../services/api";
-import { Server } from "lucide-react";
 
 export const ProfileView: React.FC = () => {
   const { gameState, userId, userName } = useGameStore();
-  const botUsername = import.meta.env.VITE_BOT_USERNAME || "ferma_a11_bot";
+  const botUsername = "agronom11_bot";
   const inTelegram = isTelegramEnv();
-
-  const [customIdInput, setCustomIdInput] = useState(getSavedTelegramId() || (userId ? String(userId) : ""));
-  const [customNameInput, setCustomNameInput] = useState(getSavedTelegramName() || userName || "");
-  const [isEditingAccount, setIsEditingAccount] = useState(false);
-  const [copiedLink, setCopiedLink] = useState(false);
-  const [backendUrlInput, setBackendUrlInput] = useState(getCustomBackendUrl());
-  const [isBackendSaved, setIsBackendSaved] = useState(false);
 
   if (!gameState) return null;
 
@@ -31,41 +22,10 @@ export const ProfileView: React.FC = () => {
     farm.chickens.chicks +
     farm.chickens.roosters +
     farm.pigs.count +
-    farm.pigs.piglets +
     farm.cows.count +
     farm.ostriches.count;
 
   const fulfilledContractsCount = business.contracts.filter((c) => c.fulfilled).length;
-
-  const handleSaveAccount = () => {
-    if (!customIdInput.trim()) return;
-    triggerHaptic("success");
-    saveTelegramCredentials(customIdInput.trim(), customNameInput.trim());
-    window.location.reload();
-  };
-
-  const handleResetAccount = () => {
-    triggerHaptic("warning");
-    clearTelegramCredentials();
-    window.location.reload();
-  };
-
-  const handleCopyAppUrl = () => {
-    triggerHaptic("light");
-    navigator.clipboard.writeText(window.location.origin);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2000);
-  };
-
-  const handleSaveBackendUrl = () => {
-    triggerHaptic("success");
-    setCustomBackendUrl(backendUrlInput);
-    setIsBackendSaved(true);
-    setTimeout(() => {
-      setIsBackendSaved(false);
-      window.location.reload();
-    }, 800);
-  };
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-xl mx-auto px-3">
@@ -76,7 +36,7 @@ export const ProfileView: React.FC = () => {
         </div>
 
         <h2 className="font-['Fredoka'] font-bold text-xl text-yellow-200">
-          {userName}
+          {userName || "Фермер"}
         </h2>
 
         <div className="inline-flex items-center gap-1.5 bg-amber-950/80 text-yellow-300 text-xs px-3 py-1 rounded-full border border-amber-500/60 font-semibold my-1 shadow-inner">
@@ -89,69 +49,12 @@ export const ProfileView: React.FC = () => {
           <span className="font-bold text-amber-300 bg-emerald-950 px-2 py-0.5 rounded border border-emerald-700">
             {userId || 1001}
           </span>
-          {inTelegram ? (
+          {inTelegram && (
             <span className="text-[10px] text-emerald-400 font-sans font-bold bg-emerald-900/80 px-1.5 py-0.5 rounded">
-              ✓ Telegram WebApp
+              ✓ Синхронізовано з ботом
             </span>
-          ) : (
-            <button
-              onClick={() => setIsEditingAccount(!isEditingAccount)}
-              className="text-[10px] text-amber-300 underline hover:text-amber-100 ml-1"
-            >
-              {isEditingAccount ? "Сховати" : "Змінити ID"}
-            </button>
           )}
         </div>
-
-        {/* Manual Account Login / Switcher (for browser usage or testing specific Telegram ID) */}
-        {isEditingAccount && !inTelegram && (
-          <div className="w-full bg-[#122414] rounded-2xl p-3 border border-amber-500/60 mt-3 text-left">
-            <h4 className="font-['Fredoka'] text-xs font-bold text-amber-300 mb-2 flex items-center gap-1.5">
-              <KeyRound className="w-3.5 h-3.5 text-amber-400" />
-              Вхід за Telegram ID (для тестування поза ботом):
-            </h4>
-            <div className="flex flex-col gap-2">
-              <div>
-                <label className="text-[10px] text-emerald-300 font-bold block mb-1">
-                  Ваш числовий Telegram ID:
-                </label>
-                <input
-                  type="number"
-                  value={customIdInput}
-                  onChange={(e) => setCustomIdInput(e.target.value)}
-                  placeholder="наприклад: 123456789"
-                  className="w-full bg-[#1a331c] border border-emerald-700 rounded-xl px-2.5 py-1.5 text-xs text-amber-100 focus:outline-none focus:border-amber-400"
-                />
-              </div>
-              <div>
-                <label className="text-[10px] text-emerald-300 font-bold block mb-1">
-                  Ім'я фермера:
-                </label>
-                <input
-                  type="text"
-                  value={customNameInput}
-                  onChange={(e) => setCustomNameInput(e.target.value)}
-                  placeholder="наприклад: Іван"
-                  className="w-full bg-[#1a331c] border border-emerald-700 rounded-xl px-2.5 py-1.5 text-xs text-amber-100 focus:outline-none focus:border-amber-400"
-                />
-              </div>
-              <div className="flex gap-2 mt-1">
-                <button
-                  onClick={handleSaveAccount}
-                  className="flex-1 py-1.5 px-3 bg-amber-500 hover:bg-amber-400 active:scale-95 text-amber-950 font-bold text-xs rounded-xl shadow transition-all"
-                >
-                  Зберегти і увійти
-                </button>
-                <button
-                  onClick={handleResetAccount}
-                  className="py-1.5 px-3 bg-emerald-900/60 hover:bg-emerald-800 active:scale-95 text-emerald-200 text-xs rounded-xl border border-emerald-700 transition-all"
-                >
-                  Скинути
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Level Progression */}
         <div className="w-full bg-[#122414] rounded-2xl p-3 border border-emerald-800/80 mt-4">
@@ -171,8 +74,9 @@ export const ProfileView: React.FC = () => {
 
       {/* 📊 Farmer Statistics Grid */}
       <div className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl flex flex-col gap-3">
-        <h3 className="font-['Fredoka'] font-bold text-base text-amber-200">
-          Досягнення та статистика
+        <h3 className="font-['Fredoka'] font-bold text-base text-amber-200 flex items-center gap-2">
+          <Trophy className="w-4 h-4 text-amber-400" />
+          Досягнення та показники ферми
         </h3>
 
         <div className="grid grid-cols-2 gap-2.5 text-xs">
@@ -186,8 +90,9 @@ export const ProfileView: React.FC = () => {
 
           <div className="bg-[#18311a] p-3 rounded-2xl border border-emerald-800 flex flex-col justify-between">
             <span className="text-emerald-300 text-[11px]">Зібрано пшениці:</span>
-            <div className="font-['Fredoka'] font-bold text-base text-yellow-200 mt-1">
-              🌾 {wheat.total_harvested} снопів
+            <div className="font-['Fredoka'] font-bold text-base text-yellow-200 mt-1 flex items-center gap-1">
+              <Sprout className="w-4 h-4 text-amber-300" />
+              {wheat.total_harvested} т
             </div>
           </div>
 
@@ -208,73 +113,28 @@ export const ProfileView: React.FC = () => {
         </div>
       </div>
 
-      {/* How to open in Telegram Instructions */}
-      <div className="bg-[#18311a] rounded-3xl p-4 border-2 border-emerald-800 flex flex-col gap-2.5 text-xs text-emerald-200">
-        <h3 className="font-['Fredoka'] font-bold text-sm text-amber-300 flex items-center gap-1.5">
-          <Send className="w-4 h-4 text-sky-400" />
-          Як відкрити у своєму Telegram боті:
-        </h3>
-        <p className="leading-relaxed text-[11px]">
-          В Telegram Mini App вхід відбувається <b>100% автоматично</b> через сам додаток Telegram без реєстрацій. Щоб підключити вашу гру до бота:
-        </p>
-        <div className="bg-[#102212] p-2.5 rounded-xl border border-emerald-900 font-mono text-[11px] text-amber-200 flex items-center justify-between gap-2">
-          <span className="truncate">{window.location.origin}</span>
-          <button
-            onClick={handleCopyAppUrl}
-            className="px-2 py-1 bg-emerald-800 hover:bg-emerald-700 text-amber-200 rounded-lg shrink-0 flex items-center gap-1 font-sans text-[10px]"
-          >
-            {copiedLink ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
-            {copiedLink ? "Скопійовано" : "Копіювати URL"}
-          </button>
+      {/* Official Bot Card */}
+      <div className="bg-gradient-to-r from-[#1b3d1f] to-[#142d17] rounded-3xl p-4 border-2 border-emerald-700 shadow-xl text-center flex flex-col items-center gap-2">
+        <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border border-amber-400 flex items-center justify-center text-2xl shadow-inner">
+          🌾
         </div>
-        <div className="text-[11px] text-emerald-300/90 leading-relaxed bg-[#142817] p-2.5 rounded-xl border border-emerald-800/60 flex flex-col gap-1">
-          <div><b>Спосіб 1 (Через @BotFather):</b></div>
-          <div>Напишіть <code>/setmenubutton</code> у @BotFather → виберіть вашого бота → надішліть скопійований URL вище. Тепер у боті з'явиться кнопка меню для запуску!</div>
-          <div className="mt-1"><b>Спосіб 2 (Кнопка в коді aiogram):</b></div>
-          <div className="font-mono text-[10px] text-amber-200 bg-[#0c180e] p-1.5 rounded">
-            InlineKeyboardButton(text="🌾 Відкрити ферму", web_app=WebAppInfo(url="{window.location.origin}"))
-          </div>
+        <div>
+          <h4 className="font-['Fredoka'] font-bold text-base text-yellow-300">
+            Ферма А-11 • Офіційний Бот
+          </h4>
+          <p className="text-xs text-emerald-200/80 mt-0.5">
+            Грайте в групі або особистих повідомленнях у Telegram
+          </p>
         </div>
-      </div>
 
-      {/* Backend API connection settings */}
-      <div className="bg-[#18311a] rounded-3xl p-4 border-2 border-emerald-800 flex flex-col gap-2.5 text-xs text-emerald-200">
-        <h3 className="font-['Fredoka'] font-bold text-sm text-yellow-300 flex items-center gap-1.5">
-          <Server className="w-4 h-4 text-emerald-400" />
-          Підключення до Python / HTTP API:
-        </h3>
-        <p className="text-[11px] text-emerald-300/90 leading-relaxed">
-          Якщо ваш Python бот / aiohttp бекенд розгорнуто на окремому сервері або порту, вкажіть його адресу нижче (за замовчуванням використовуються відносні запити <code>/api</code> або вбудований офлайн-движок):
-        </p>
-        <div className="flex gap-2">
-          <input
-            type="text"
-            value={backendUrlInput}
-            onChange={(e) => setBackendUrlInput(e.target.value)}
-            placeholder="наприклад: https://api.myfarm.com (або пусто)"
-            className="flex-1 bg-[#102212] border border-emerald-700 rounded-xl px-2.5 py-1.5 text-xs text-amber-100 placeholder:text-emerald-700 focus:outline-none focus:border-amber-400"
-          />
-          <button
-            onClick={handleSaveBackendUrl}
-            className="px-3 py-1.5 bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold text-xs rounded-xl shadow transition-all shrink-0 flex items-center gap-1"
-          >
-            {isBackendSaved ? <Check className="w-3.5 h-3.5 text-emerald-950" /> : null}
-            {isBackendSaved ? "Збережено" : "Зберегти API"}
-          </button>
-        </div>
-      </div>
-
-      {/* Bot Info Footer */}
-      <div className="bg-[#18311a] rounded-2xl p-3 border border-emerald-800/80 text-center text-xs text-emerald-200/80 flex flex-col items-center gap-1">
-        <span>Офіційний Telegram Mini App "Ферма А-11"</span>
         <a
-          href={`https://t.me/${botUsername.replace("@", "")}`}
+          href={`https://t.me/${botUsername}`}
           target="_blank"
           rel="noopener noreferrer"
           onClick={() => triggerHaptic("light")}
-          className="text-amber-300 font-bold hover:underline flex items-center gap-1"
+          className="mt-1 px-4 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-amber-950 font-['Fredoka'] font-bold text-xs rounded-xl shadow-md border border-amber-300 flex items-center gap-1.5 transition-all"
         >
-          <Send className="w-3 h-3" /> @{botUsername.replace("@", "")}
+          <Send className="w-4 h-4" /> Відкрити @{botUsername}
         </a>
       </div>
     </div>

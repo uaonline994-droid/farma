@@ -1,18 +1,18 @@
-import React, { useEffect, useState } from "react";
-import { useQuery, useMutation, useQueryClient, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { initTelegramApp, getTelegramInitData, getTelegramUser, isTelegramEnv, triggerHaptic } from "./services/telegram";
-import { authApi, fetchGameState, executeAction, ApiError } from "./services/api";
+import React, { useEffect } from "react";
+import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
+import { authApi, fetchGameState, executeAction } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
 import { ToastContainer } from "./components/ui/ToastContainer";
 import { SkeletonLoader } from "./components/ui/SkeletonLoader";
-import { ApiStatusBanner } from "./components/ui/ApiStatusBanner";
 import { FarmCanvas } from "./components/farm/FarmCanvas";
 import { WheatFieldView } from "./components/wheat/WheatFieldView";
 import { MarketView } from "./components/market/MarketView";
 import { ShopView } from "./components/shop/ShopView";
 import { BusinessView } from "./components/business/BusinessView";
+import { CasinoView } from "./components/casino/CasinoView";
 import { LeaderboardView } from "./components/leaderboard/LeaderboardView";
 import { ProfileView } from "./components/profile/ProfileView";
 import { motion, AnimatePresence } from "motion/react";
@@ -33,7 +33,6 @@ function FarmGame() {
     setAuthData,
     setAuthLoading,
     setAuthError,
-    isAuthenticated,
     setGameState,
     addToast,
     gameState,
@@ -65,20 +64,19 @@ function FarmGame() {
     initializeAuth();
   }, []);
 
-  // 2. Fetch Game State via TanStack Query
+  // 2. Fetch Game State via TanStack Query (synced with https://vogi.onrender.com)
   const {
     data: fetchedState,
     isLoading: isStateLoading,
     isFetching,
-    error: stateError,
     refetch: refetchState,
   } = useQuery({
     queryKey: ["gameState"],
     queryFn: fetchGameState,
-    refetchInterval: 5000, // Background sync every 5s for smooth timers
+    refetchInterval: 5000, // Background sync every 5s for smooth state & timers
   });
 
-  // Sync state to Zustand
+  // Sync state to Zustand store
   useEffect(() => {
     if (fetchedState) {
       setGameState(fetchedState);
@@ -105,9 +103,6 @@ function FarmGame() {
     await actionMutation.mutateAsync({ actionName, params });
   };
 
-  const isError = Boolean(stateError);
-  const errorMessage = stateError ? (stateError as Error).message : null;
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-[#1c381f] via-[#244527] to-[#172c19] text-amber-50 flex flex-col justify-between selection:bg-amber-400 selection:text-amber-950 font-['Nunito']">
       {/* Top Header */}
@@ -118,14 +113,6 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
-        {/* API connection warning if disconnected */}
-        <ApiStatusBanner
-          isError={isError}
-          errorMessage={errorMessage}
-          onRetry={() => refetchState()}
-          isLoading={isFetching}
-        />
-
         {isStateLoading && !gameState ? (
           <SkeletonLoader />
         ) : (
@@ -148,6 +135,9 @@ function FarmGame() {
               )}
               {activeTab === "shop" && (
                 <ShopView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "casino" && (
+                <CasinoView onAction={handleAction} isLoading={actionMutation.isPending} />
               )}
               {activeTab === "business" && (
                 <BusinessView onAction={handleAction} isLoading={actionMutation.isPending} />

@@ -185,7 +185,7 @@ export interface ActionResponse {
   message: string;
 }
 
-export type TabType = "farm" | "wheat" | "market" | "shop" | "business" | "leaderboard" | "profile";
+export type TabType = "farm" | "wheat" | "market" | "shop" | "business" | "casino" | "leaderboard" | "profile";
 
 export interface ToastItem {
   id: string;

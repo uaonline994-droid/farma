@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { useGameStore } from "../../store/gameStore";
 import { triggerHaptic } from "../../services/telegram";
-import { ChickenSprite, CowSprite, PigSprite, OstrichSprite, PotatoPlotSprite } from "./sprites/FarmSprites";
-import { Sparkles, Utensils, Egg, Plus, Scissors, Milk, ChevronRight, Award, Zap } from "lucide-react";
+import { RoosterSprite, HenSprite, ChickSprite, CowSprite, PigSprite, OstrichSprite, PotatoPlotSprite } from "./sprites/FarmSprites";
+import { Sparkles, Utensils, Egg, Plus, Scissors, Milk, Award, Zap } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion } from "motion/react";
 
@@ -10,7 +10,7 @@ export const FarmCanvas: React.FC<{
   onAction: (actionName: string, params?: Record<string, unknown>) => Promise<void>;
   isLoading?: boolean;
 }> = ({ onAction, isLoading = false }) => {
-  const { gameState, soundEnabled } = useGameStore();
+  const { gameState } = useGameStore();
 
   const [potatoPlantCount, setPotatoPlantCount] = useState(10);
   const [selectedAnimalTab, setSelectedAnimalTab] = useState<"chickens" | "pigs" | "cows" | "ostriches">("chickens");
@@ -24,12 +24,8 @@ export const FarmCanvas: React.FC<{
   const potatoSeedsAvailable = gameState.economy.seed_stock.potato;
   const grainFeed = gameState.economy.feed_stock.grain;
 
-  // Master collect helper with fireworks
   const handleMasterCollect = async () => {
     triggerHaptic("heavy");
-    if (soundEnabled) {
-      // Optional Web Audio api sound could trigger here
-    }
     try {
       confetti({
         particleCount: 50,
@@ -37,9 +33,7 @@ export const FarmCanvas: React.FC<{
         origin: { y: 0.6 },
         colors: ["#f59e0b", "#10b981", "#3b82f6", "#ec4899"],
       });
-    } catch {
-      // Ignore if canvas confetti fails in some webview
-    }
+    } catch {}
     await onAction("collect");
   };
 
@@ -58,7 +52,7 @@ export const FarmCanvas: React.FC<{
             <p className="text-[11px] text-amber-100/90 truncate">
               {potatoReady || farm.chickens.eggs > 0 || farm.cows.milk > 0
                 ? "Є готовий врожай та продукти!"
-                : "Зібрати всі доступні яйця, молоко та врожай"}
+                : "Зібрати всі доступні яйця, молоко та картоплю"}
             </p>
           </div>
         </div>
@@ -69,14 +63,13 @@ export const FarmCanvas: React.FC<{
           disabled={isLoading}
           className="px-4 py-2 bg-gradient-to-b from-yellow-300 to-amber-400 hover:from-yellow-200 hover:to-amber-300 active:scale-95 text-amber-950 font-['Fredoka'] font-bold text-xs rounded-xl shadow-md border border-yellow-100 transition-all flex items-center gap-1.5 shrink-0"
         >
-          <Sparkles className="w-4 h-4 text-amber-900 animate-spin-slow" />
+          <Sparkles className="w-4 h-4 text-amber-900" />
           Зібрати все
         </button>
       </div>
 
       {/* 🥔 1. POTATO FIELD SECTION */}
       <section className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl relative overflow-hidden">
-        {/* Background Grass Pattern */}
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <span className="text-xl">🥔</span>
@@ -90,7 +83,6 @@ export const FarmCanvas: React.FC<{
             </div>
           </div>
 
-          {/* Growth Status Pill */}
           <div className="flex items-center gap-1.5 bg-[#173019] px-2.5 py-1 rounded-full border border-emerald-600/50 text-xs">
             {potatoReady ? (
               <span className="text-emerald-300 font-bold flex items-center gap-1 animate-pulse">
@@ -110,7 +102,6 @@ export const FarmCanvas: React.FC<{
         <div className="relative bg-gradient-to-b from-[#1b3d1f] to-[#142d17] rounded-2xl p-4 border border-emerald-900/80 flex flex-col items-center justify-center my-2 shadow-inner min-h-[140px]">
           <PotatoPlotSprite progress={potatoProgress} ready={potatoReady} />
 
-          {/* Progress Bar under the plot */}
           {potato.count > 0 && (
             <div className="w-full max-w-xs mt-2">
               <div className="h-2.5 bg-emerald-950 rounded-full overflow-hidden border border-emerald-700/60 p-[1px]">
@@ -127,7 +118,7 @@ export const FarmCanvas: React.FC<{
           )}
         </div>
 
-        {/* Action Controls for Potato */}
+        {/* Controls for Potato */}
         <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           {potatoReady ? (
             <button
@@ -144,7 +135,6 @@ export const FarmCanvas: React.FC<{
             </button>
           ) : (
             <div className="w-full flex items-center gap-2">
-              {/* Count selector */}
               <div className="flex items-center bg-[#18311a] rounded-xl border border-emerald-700/60 p-1">
                 <button
                   onClick={() => setPotatoPlantCount(Math.max(5, potatoPlantCount - 5))}
@@ -184,7 +174,7 @@ export const FarmCanvas: React.FC<{
         </div>
       </section>
 
-      {/* 🐾 2. ANIMAL RANCH SECTION (TABS) */}
+      {/* 🐾 2. ANIMAL RANCH SECTION */}
       <section className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
@@ -193,32 +183,20 @@ export const FarmCanvas: React.FC<{
               Тваринницька ферма
             </h2>
           </div>
-
-          <button
-            id="btn-feed-all-animals"
-            onClick={() => {
-              triggerHaptic("medium");
-              onAction("feed_animals");
-            }}
-            disabled={isLoading || grainFeed < 10}
-            className={`flex items-center gap-1 text-[11px] font-bold px-2.5 py-1.5 rounded-xl border transition-all ${
-              grainFeed >= 10
-                ? "bg-emerald-800/80 hover:bg-emerald-700 text-amber-200 border-emerald-500/60 active:scale-95"
-                : "bg-gray-800/40 text-gray-400 border-gray-700 cursor-not-allowed"
-            }`}
-          >
-            <Utensils className="w-3.5 h-3.5 text-amber-400" />
-            Нагодувати всіх (10 зерен)
-          </button>
         </div>
 
         {/* Animal Category Tabs */}
         <div className="grid grid-cols-4 gap-1.5 p-1 bg-[#18311a] rounded-2xl border border-emerald-800/80 mb-3">
           {[
-            { id: "chickens", label: "Кури", icon: "🐔", count: farm.chickens.count },
+            {
+              id: "chickens",
+              label: "Кури",
+              icon: "🐔",
+              count: farm.chickens.count + farm.chickens.roosters + farm.chickens.chicks,
+            },
             { id: "pigs", label: "Свині", icon: "🐖", count: farm.pigs.count },
             { id: "cows", label: "Корови", icon: "🐄", count: farm.cows.count },
-            { id: "ostriches", label: "Страуси", icon: "🪶", count: farm.ostriches.count },
+            { id: "ostriches", label: "Страуси", icon: "🦤", count: farm.ostriches.count },
           ].map((cat) => {
             const isSelected = selectedAnimalTab === cat.id;
             return (
@@ -253,27 +231,46 @@ export const FarmCanvas: React.FC<{
                 </span>
               </div>
 
-              {/* Visual Scene with Sprites */}
-              <div className="h-32 bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-around px-2 pb-2">
-                <ChickenSprite type="rooster" className="w-16 h-16" />
-                <ChickenSprite type="hen" className="w-14 h-14" />
-                {farm.chickens.chicks > 0 && <ChickenSprite type="chick" className="w-10 h-10" />}
-                <ChickenSprite type="hen" className="w-14 h-14" />
+              {/* Dynamic Visual Scene displaying actual animal counts */}
+              <div className="min-h-[140px] bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-around px-2 pb-2 gap-1 flex-wrap">
+                {farm.chickens.count === 0 && farm.chickens.roosters === 0 && farm.chickens.chicks === 0 ? (
+                  <div className="w-full text-center py-6 text-xs text-amber-200/70">
+                    <p className="font-bold text-yellow-300">Курник пустий 🌾</p>
+                    <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                      Купіть курей та півня у вкладці <b>Крамниця</b>!
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {/* Render Roosters */}
+                    {Array.from({ length: Math.min(2, farm.chickens.roosters) }).map((_, i) => (
+                      <RoosterSprite key={`rooster-${i}`} className="w-18 h-18" />
+                    ))}
+                    {/* Render Hens */}
+                    {Array.from({ length: Math.min(3, farm.chickens.count) }).map((_, i) => (
+                      <HenSprite key={`hen-${i}`} className="w-16 h-16" />
+                    ))}
+                    {/* Render Chicks (Yellow fluffy) */}
+                    {Array.from({ length: Math.min(3, farm.chickens.chicks) }).map((_, i) => (
+                      <ChickSprite key={`chick-${i}`} className="w-12 h-12" />
+                    ))}
+                  </>
+                )}
               </div>
 
               {/* Stats badges */}
               <div className="grid grid-cols-3 gap-2 text-center text-[11px] bg-[#142b17] p-2 rounded-xl border border-emerald-800/50">
-                <div>
-                  <div className="text-emerald-300">Кури</div>
+                <div className="flex flex-col items-center">
+                  <div className="text-emerald-300 flex items-center gap-1">🐔 Кури-несучки</div>
                   <div className="font-bold text-amber-200 font-['Fredoka'] text-sm">{farm.chickens.count}</div>
                 </div>
-                <div>
-                  <div className="text-emerald-300">Півні</div>
+                <div className="flex flex-col items-center">
+                  <div className="text-emerald-300 flex items-center gap-1">🐓 Півні</div>
                   <div className="font-bold text-amber-200 font-['Fredoka'] text-sm">{farm.chickens.roosters}</div>
                 </div>
-                <div>
-                  <div className="text-emerald-300">Курчата</div>
-                  <div className="font-bold text-amber-200 font-['Fredoka'] text-sm">{farm.chickens.chicks}</div>
+                <div className="flex flex-col items-center">
+                  <div className="text-emerald-300 flex items-center gap-1">🐤 Курчата</div>
+                  <div className="font-bold text-yellow-300 font-['Fredoka'] text-sm">{farm.chickens.chicks}</div>
                 </div>
               </div>
 
@@ -285,8 +282,12 @@ export const FarmCanvas: React.FC<{
                     triggerHaptic("medium");
                     onAction("breed");
                   }}
-                  disabled={isLoading}
-                  className="py-2 px-2 bg-amber-800/60 hover:bg-amber-700/80 active:scale-95 text-amber-100 rounded-xl text-xs font-['Fredoka'] font-semibold border border-amber-600/50 flex items-center justify-center gap-1 transition-all"
+                  disabled={isLoading || farm.chickens.roosters === 0 || farm.chickens.count === 0}
+                  className={`py-2 px-2 rounded-xl text-xs font-['Fredoka'] font-semibold border flex items-center justify-center gap-1 transition-all ${
+                    farm.chickens.roosters > 0 && farm.chickens.count > 0
+                      ? "bg-amber-800/80 hover:bg-amber-700 text-amber-100 border-amber-600/50 active:scale-95"
+                      : "bg-gray-800/40 text-gray-500 border-gray-700 cursor-not-allowed"
+                  }`}
                 >
                   <Egg className="w-3.5 h-3.5 text-amber-300" />
                   Висидіти курчат
@@ -297,13 +298,13 @@ export const FarmCanvas: React.FC<{
                     id="btn-raise-chicks"
                     onClick={() => {
                       triggerHaptic("success");
-                      onAction("raise");
+                      onAction("raise_chicks");
                     }}
                     disabled={isLoading}
                     className="py-2 px-2 bg-gradient-to-r from-emerald-600 to-emerald-700 hover:from-emerald-500 text-white rounded-xl text-xs font-['Fredoka'] font-bold border border-emerald-400 active:scale-95 flex items-center justify-center gap-1 shadow"
                   >
                     <Zap className="w-3.5 h-3.5 text-yellow-300" />
-                    Виростити ({farm.chickens.chicks})
+                    Виростити ({farm.chickens.chicks} курчат)
                   </button>
                 ) : (
                   <button
@@ -337,24 +338,33 @@ export const FarmCanvas: React.FC<{
                 </span>
               </div>
 
-              <div className="h-32 bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-around px-2 pb-1">
-                <PigSprite className="w-20 h-20" />
-                {farm.pigs.piglets > 0 && <PigSprite className="w-14 h-14" isPiglet />}
-                <PigSprite className="w-20 h-20" />
+              <div className="min-h-[140px] bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-around px-2 pb-2">
+                {farm.pigs.count === 0 ? (
+                  <div className="w-full text-center py-6 text-xs text-amber-200/70">
+                    <p className="font-bold text-yellow-300">Свинарник пустий 🌾</p>
+                    <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                      Купіть свиней у вкладці <b>Крамниця</b>!
+                    </p>
+                  </div>
+                ) : (
+                  Array.from({ length: Math.min(3, farm.pigs.count) }).map((_, i) => (
+                    <PigSprite key={`pig-${i}`} className="w-24 h-24" />
+                  ))
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-center text-[11px] bg-[#142b17] p-2 rounded-xl border border-emerald-800/50">
                 <div>
-                  <div className="text-emerald-300">Дорослі свині</div>
+                  <div className="text-emerald-300">Свиней на фермі</div>
                   <div className="font-bold text-amber-200 font-['Fredoka'] text-sm">{farm.pigs.count}</div>
                 </div>
                 <div>
-                  <div className="text-emerald-300">Поросята</div>
-                  <div className="font-bold text-amber-200 font-['Fredoka'] text-sm">{farm.pigs.piglets}</div>
+                  <div className="text-emerald-300">Запаси м'яса</div>
+                  <div className="font-bold text-pink-300 font-['Fredoka'] text-sm">{farm.pigs.meat} кг</div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-1 gap-2">
                 <button
                   id="btn-slaughter-pig"
                   onClick={() => {
@@ -370,23 +380,6 @@ export const FarmCanvas: React.FC<{
                 >
                   <Scissors className="w-3.5 h-3.5 text-red-300" />
                   Забій 1 свині (+18 кг м'яса)
-                </button>
-
-                <button
-                  id="btn-raise-piglets"
-                  onClick={() => {
-                    triggerHaptic("success");
-                    onAction("raise");
-                  }}
-                  disabled={isLoading || farm.pigs.piglets === 0}
-                  className={`py-2 px-2 rounded-xl text-xs font-['Fredoka'] font-bold border flex items-center justify-center gap-1 transition-all ${
-                    farm.pigs.piglets > 0
-                      ? "bg-gradient-to-r from-pink-600 to-rose-600 text-white border-pink-400 active:scale-95 shadow"
-                      : "bg-gray-800/40 text-gray-500 border-gray-700 cursor-not-allowed"
-                  }`}
-                >
-                  <Zap className="w-3.5 h-3.5 text-pink-200" />
-                  Виростити поросят ({farm.pigs.piglets})
                 </button>
               </div>
             </div>
@@ -407,8 +400,19 @@ export const FarmCanvas: React.FC<{
                 </div>
               </div>
 
-              <div className="h-32 bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-center px-2 pb-1">
-                <CowSprite className="w-28 h-28" />
+              <div className="min-h-[140px] bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-center px-2 pb-2">
+                {farm.cows.count === 0 ? (
+                  <div className="w-full text-center py-6 text-xs text-amber-200/70">
+                    <p className="font-bold text-yellow-300">Корівник пустий 🌾</p>
+                    <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                      Купіть дійних корів у вкладці <b>Крамниця</b>!
+                    </p>
+                  </div>
+                ) : (
+                  Array.from({ length: Math.min(2, farm.cows.count) }).map((_, i) => (
+                    <CowSprite key={`cow-${i}`} className="w-28 h-28" />
+                  ))
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center text-[11px] bg-[#142b17] p-2 rounded-xl border border-emerald-800/50">
@@ -441,7 +445,7 @@ export const FarmCanvas: React.FC<{
                   }`}
                 >
                   <Award className="w-3.5 h-3.5" />
-                  Зварити сир (3 л молока)
+                  Зварити сир (3 л)
                 </button>
 
                 <button
@@ -474,8 +478,19 @@ export const FarmCanvas: React.FC<{
                 </span>
               </div>
 
-              <div className="h-32 bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-center px-2 pb-1">
-                <OstrichSprite className="w-24 h-28" />
+              <div className="min-h-[140px] bg-gradient-to-b from-[#214a26] to-[#19381c] rounded-xl border border-emerald-700/40 relative overflow-hidden flex items-end justify-center px-2 pb-2">
+                {farm.ostriches.count === 0 ? (
+                  <div className="w-full text-center py-6 text-xs text-amber-200/70">
+                    <p className="font-bold text-yellow-300">Вольєр пустий 🌾</p>
+                    <p className="text-[11px] text-emerald-300/80 mt-0.5">
+                      Купіть страусів у вкладці <b>Крамниця</b>!
+                    </p>
+                  </div>
+                ) : (
+                  Array.from({ length: Math.min(2, farm.ostriches.count) }).map((_, i) => (
+                    <OstrichSprite key={`ostrich-${i}`} className="w-28 h-32" />
+                  ))
+                )}
               </div>
 
               <div className="grid grid-cols-3 gap-2 text-center text-[11px] bg-[#142b17] p-2 rounded-xl border border-emerald-800/50">

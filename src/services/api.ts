@@ -1,22 +1,10 @@
 import { getTelegramInitData, getTelegramUser } from "./telegram";
-import { AuthResponse, GameState, ActionResponse, LeaderboardResponse, LeaderboardEntry } from "../types";
-import { getLocalState, executeLocalAction, saveLocalState, createInitialLocalState } from "./localEngine";
+import { AuthResponse, GameState, ActionResponse, LeaderboardResponse } from "../types";
 
-export function checkAndExtractQueryBackendUrl(): string | null {
-  if (typeof window !== "undefined") {
-    try {
-      const urlParams = new URLSearchParams(window.location.search);
-      const apiParam = urlParams.get("api") || urlParams.get("backend") || urlParams.get("server");
-      if (apiParam && apiParam.trim()) {
-        const clean = apiParam.trim().replace(/\/$/, "");
-        localStorage.setItem("farmer_custom_backend_url", clean);
-        return clean;
-      }
-    } catch (e) {
-      console.warn("Failed to parse query backend url", e);
-    }
-  }
-  return null;
+export const PERMANENT_BACKEND_URL = "https://artemfurry.pythonanywhere.com";
+
+export function getBaseUrl(): string {
+  return PERMANENT_BACKEND_URL;
 }
 
 export function getSavedTelegramId(): string | null {
@@ -33,25 +21,6 @@ export function getSavedTelegramName(): string | null {
   return null;
 }
 
-export function getCustomBackendUrl(): string {
-  if (typeof window !== "undefined") {
-    checkAndExtractQueryBackendUrl();
-    const saved = localStorage.getItem("farmer_custom_backend_url");
-    if (saved) return saved.replace(/\/$/, "");
-  }
-  return "";
-}
-
-export function setCustomBackendUrl(url: string) {
-  if (typeof window !== "undefined") {
-    if (url.trim()) {
-      localStorage.setItem("farmer_custom_backend_url", url.trim().replace(/\/$/, ""));
-    } else {
-      localStorage.removeItem("farmer_custom_backend_url");
-    }
-  }
-}
-
 export function saveTelegramCredentials(userId: number | string, name?: string) {
   if (typeof window !== "undefined") {
     localStorage.setItem("farmer_custom_tg_id", String(userId));
@@ -66,15 +35,6 @@ export function clearTelegramCredentials() {
     localStorage.removeItem("farmer_custom_tg_id");
     localStorage.removeItem("farmer_custom_tg_name");
   }
-}
-
-export function getBaseUrl(): string {
-  const custom = getCustomBackendUrl();
-  if (custom) return custom;
-  if (typeof import.meta !== "undefined" && import.meta.env && import.meta.env.VITE_API_URL) {
-    return import.meta.env.VITE_API_URL.replace(/\/$/, "");
-  }
-  return "";
 }
 
 function getHeaders(): HeadersInit {
@@ -108,16 +68,12 @@ export class ApiError extends Error {
 
 // Adapts Python bot's _serialize_farm_state directly to React GameState
 export function transformPythonResponseToGameState(data: any): GameState {
-  if (!data || typeof data !== "object") {
-    return getLocalState();
-  }
-
-  const rawFarm = data.farm || {};
-  const rawEcon = data.economy || {};
-  const rawWheat = data.wheat || {};
-  const rawLevel = data.level;
-  const rawLevelName = data.level_name || "Фермер";
-  const rawContract = data.contract;
+  const rawFarm = data?.farm || {};
+  const rawEcon = data?.economy || {};
+  const rawWheat = data?.wheat || {};
+  const rawLevel = data?.level;
+  const rawLevelName = data?.level_name || "Фермер";
+  const rawContract = data?.contract;
 
   const now = Date.now();
 
@@ -182,7 +138,7 @@ export function transformPythonResponseToGameState(data: any): GameState {
       id: String(rawContract.id || "c1"),
       title: rawContract.text || "Контракт на поставку",
       description: `Потрібно ${rawContract.need}× продукції`,
-      req_item: rawContract.product === "eggs" ? "egg" : rawContract.product,
+      req_item: rawContract.product,
       req_count: rawContract.need || 1,
       reward_coins: rawContract.reward || 100,
       reward_xp: 100,
@@ -197,7 +153,7 @@ export function transformPythonResponseToGameState(data: any): GameState {
   const nextXp = levelThresholds[levelNum] || levelNum * 2500;
 
   return {
-    tag: data.tag || "Агроном 🌾",
+    tag: data?.tag || "Агроном 🌾",
     level: {
       current: levelNum,
       xp,
@@ -249,7 +205,15 @@ export function transformPythonResponseToGameState(data: any): GameState {
       balance: typeof rawEcon.balance === "number" ? rawEcon.balance : 0,
       gems: 0,
       storage: {
-        used: (rawFarm.eggs || 0) + (rawFarm.milk || 0) + (rawFarm.meat || 0) + (rawFarm.potato || 0) + (rawFarm.lard || 0) + (rawFarm.cheese || 0),
+        used:
+          (rawFarm.eggs || 0) +
+          (rawFarm.milk || 0) +
+          (rawFarm.meat || 0) +
+          (rawFarm.potato || 0) +
+          (rawFarm.lard || 0) +
+          (rawFarm.cheese || 0) +
+          (rawFarm.feathers || 0) +
+          (rawFarm.ostrich_eggs || 0),
         max: 10000,
       },
       prices: {
@@ -279,11 +243,11 @@ export function transformPythonResponseToGameState(data: any): GameState {
       total_harvested: rawWheat.wheat || 0,
     },
     workers: {
-      hired: Array.isArray(data.workers) ? data.workers.length : 0,
+      hired: Array.isArray(data?.workers) ? data.workers.length : 0,
       speed_boost: 0,
       auto_collector: false,
       slots: 4,
-      cost_per_hour: data.worker_wage_per_hour || 0,
+      cost_per_hour: data?.worker_wage_per_hour || 0,
     },
     business: {
       level_name: "Ферма А-11",
@@ -310,41 +274,31 @@ export async function authApi(
     getSavedTelegramName() ||
     (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username : "Фермер");
 
-  try {
-    const baseUrl = getBaseUrl();
-    const res = await fetch(`${baseUrl}/api/auth`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(initData ? { "X-Telegram-Init-Data": initData } : {}),
-      },
-      body: JSON.stringify({
-        initData: initData || `user=${encodeURIComponent(JSON.stringify({ id: savedId, first_name: savedName }))}`,
-        customUserId: savedId,
-        customUserName: savedName,
-      }),
-    });
+  const baseUrl = getBaseUrl();
+  const res = await fetch(`${baseUrl}/api/auth`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(initData ? { "X-Telegram-Init-Data": initData } : {}),
+    },
+    body: JSON.stringify({
+      initData: initData || `user=${encodeURIComponent(JSON.stringify({ id: savedId, first_name: savedName }))}`,
+      customUserId: savedId,
+      customUserName: savedName,
+    }),
+  });
 
-    const contentType = res.headers.get("content-type") || "";
-    if (contentType.includes("text/html")) {
-      throw new ApiError("Бекенд не знайдено за цією адресою (повернуто HTML замість JSON API)", 404);
-    }
-
-    if (res.ok) {
-      const data = await res.json();
-      return {
-        ok: true,
-        user_id: data.user_id || Number(savedId),
-        chat_id: data.chat_id || Number(savedId),
-        user_name: data.name || String(savedName),
-      };
-    } else {
-      const errData = await res.json().catch(() => ({}));
-      throw new ApiError(errData.error || `Помилка сервера: HTTP ${res.status}`, res.status);
-    }
-  } catch (e: any) {
-    console.warn("Backend auth error:", e);
-    throw e;
+  if (res.ok) {
+    const data = await res.json();
+    return {
+      ok: true,
+      user_id: data.user_id || Number(savedId),
+      chat_id: data.chat_id || Number(savedId),
+      user_name: data.name || String(savedName),
+    };
+  } else {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || `Помилка сервера: HTTP ${res.status}`, res.status);
   }
 }
 
@@ -354,14 +308,6 @@ export async function fetchGameState(): Promise<GameState> {
     method: "GET",
     headers: getHeaders(),
   });
-
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("text/html")) {
-    throw new ApiError(
-      "Запит на /api/state повернув веб-сторінку замість JSON. Вкажіть URL вашого Python API у вкладці 'Профіль' або параметром ?api=http://IP:8080",
-      404
-    );
-  }
 
   if (res.status === 401) {
     throw new ApiError("Помилка авторизації Telegram (недійсний initData)", 401);
@@ -377,57 +323,80 @@ export async function fetchGameState(): Promise<GameState> {
   }
 
   const data = await res.json();
-  const transformed = transformPythonResponseToGameState(data);
-  saveLocalState(transformed);
-  return transformed;
+  return transformPythonResponseToGameState(data);
 }
 
 export async function executeAction(actionName: string, params: Record<string, unknown> = {}): Promise<ActionResponse> {
-  // Normalize action name for Python aiohttp bot
   let pythonAction = actionName;
   const pythonPayload: Record<string, unknown> = { ...params };
 
-  if (actionName === "collect") {
+  // Map front-end actions to Python bot api_action handlers
+  if (actionName === "collect" || actionName === "harvest_potato" || actionName === "collect_eggs" || actionName === "collect_milk" || actionName === "collect_ostrich") {
     pythonAction = "collect_farm";
-  } else if (actionName === "harvest_potato") {
-    pythonAction = "collect_farm";
-  } else if (actionName === "plant_wheat" || actionName === "plant_all_wheat") {
-    pythonAction = "wheat_plant";
-  } else if (actionName === "harvest_wheat" || actionName === "harvest_all_wheat") {
-    pythonAction = "wheat_collect";
-  } else if (actionName === "sell_wheat") {
-    pythonAction = "wheat_sell_local";
-  } else if (actionName === "raise") {
+  } else if (actionName === "plant_potato") {
+    pythonAction = "plant_potato";
+    pythonPayload.count = Number(params.count) || 1;
+  } else if (actionName === "slaughter") {
+    pythonAction = "slaughter";
+    pythonPayload.count = Number(params.count) || 1;
+  } else if (actionName === "cheese") {
+    pythonAction = "cheese";
+  } else if (actionName === "breed") {
+    pythonAction = "breed";
+  } else if (actionName === "raise" || actionName === "raise_chicks") {
     pythonAction = "raise_chicks";
-  } else if (actionName === "buy_shop_item") {
+  } else if (actionName === "plant_wheat" || actionName === "plant_all_wheat" || actionName === "wheat_plant") {
+    pythonAction = "wheat_plant";
+  } else if (actionName === "harvest_wheat" || actionName === "harvest_all_wheat" || actionName === "wheat_collect") {
+    pythonAction = "wheat_collect";
+  } else if (actionName === "sell_wheat" || actionName === "wheat_sell_local") {
+    pythonAction = "wheat_sell_local";
+  } else if (actionName === "shop_buy" || actionName === "buy_shop_item") {
     pythonAction = "shop_buy";
-    const itemId = String(params.item_id || "");
-    const mapItems: Record<string, string> = {
+    // Valid shop items in Python bot: chicken, rooster, pig, cow, ostrich, grain, hay, mix, seed
+    let rawItem = String(params.item || params.item_id || "");
+    const mapShop: Record<string, string> = {
+      seed_potato: "seed",
       potato_seed: "seed",
-      wheat_seed: "wheat_seed",
       grain_feed: "grain",
       hay_feed: "hay",
       premium_feed: "mix",
-      chicken: "chicken",
-      pig: "pig",
-      cow: "cow",
-      ostrich: "ostrich",
+      chick: "chicken", // bot sells chickens, chicks are raised
+      ostrich_chick: "ostrich",
+      piglet: "pig",
     };
-    pythonPayload.item = mapItems[itemId] || itemId;
-    pythonPayload.count = Number(params.amount) || 1;
-  } else if (actionName === "sell_product") {
-    const prod = String(params.product || "");
-    const mapProd: Record<string, string> = {
+    pythonPayload.item = mapShop[rawItem] || rawItem;
+    pythonPayload.count = Number(params.count || params.amount) || 1;
+  } else if (actionName === "sell_product" || actionName === "market_sell") {
+    pythonAction = "sell_product";
+    // Valid products in Python bot: eggs, milk, meat, lard, cheese, potato, feather, ostrich_egg
+    let rawItem = String(params.item || params.product || "");
+    const mapProduct: Record<string, string> = {
       egg: "eggs",
+      eggs: "eggs",
       potato: "potato",
       milk: "milk",
       meat: "meat",
+      lard: "lard",
       cheese: "cheese",
       ostrich_feather: "feather",
+      feather: "feather",
       ostrich_egg: "ostrich_egg",
     };
-    pythonPayload.item = mapProd[prod] || prod;
+    pythonPayload.item = mapProduct[rawItem] || rawItem;
+    pythonPayload.count = Number(params.count || params.amount) || 1;
+  } else if (actionName === "sell_animal") {
+    pythonAction = "sell_animal";
+    // Valid animals: chicken, rooster, pig, cow, ostrich, chick
+    pythonPayload.item = String(params.item || "");
     pythonPayload.count = Number(params.count) || 1;
+  } else if (actionName === "hire_worker") {
+    pythonAction = "hire_worker";
+    pythonPayload.worker = String(params.worker || "");
+  } else if (actionName === "fulfill_contract") {
+    pythonAction = "fulfill_contract";
+  } else if (actionName === "new_contract") {
+    pythonAction = "new_contract";
   }
 
   const baseUrl = getBaseUrl();
@@ -439,11 +408,6 @@ export async function executeAction(actionName: string, params: Record<string, u
       ...pythonPayload,
     }),
   });
-
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("text/html")) {
-    throw new ApiError("Бекенд не відповідає на дію (отримано HTML замість API)", 404);
-  }
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));
@@ -463,11 +427,6 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
     method: "GET",
     headers: getHeaders(),
   });
-
-  const contentType = res.headers.get("content-type") || "";
-  if (contentType.includes("text/html")) {
-    throw new ApiError("Не вдалося завантажити рейтинг з сервера бота (отримано HTML)", 404);
-  }
 
   if (!res.ok) {
     const errData = await res.json().catch(() => ({}));

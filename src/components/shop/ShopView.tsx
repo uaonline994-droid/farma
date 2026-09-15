@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useGameStore } from "../../store/gameStore";
 import { triggerHaptic } from "../../services/telegram";
-import { ShoppingBag, Coins, Plus, Minus, CheckCircle, Sparkles } from "lucide-react";
+import { ShoppingBag, Coins, Plus, Minus, Sparkles } from "lucide-react";
 import confetti from "canvas-confetti";
 
 interface ShopItem {
@@ -15,102 +15,138 @@ interface ShopItem {
 }
 
 const SHOP_ITEMS: ShopItem[] = [
-  // Animals
+  // 🐾 Тварини (ціни та ідентифікатори 1:1 з Python-бота)
   {
-    id: "chick",
+    id: "chicken",
     category: "animals",
-    name: "Пухнасте Курча",
-    icon: "🐣",
-    price: 45,
+    name: "Курка-несучка",
+    icon: "🐔",
+    price: 100,
     unit: "шт.",
-    description: "Швидко виростає у дорослу курку-несучку",
+    description: "Несе свіжі фермерські яйця у гнізда",
   },
   {
     id: "rooster",
     category: "animals",
-    name: "Породистий Півень",
+    name: "Півень-захисник",
     icon: "🐓",
-    price: 120,
+    price: 300,
     unit: "шт.",
-    description: "Необхідний для природного висиджування курчат",
+    description: "Необхідний для висиджування курчат із яєць",
   },
   {
-    id: "piglet",
+    id: "pig",
     category: "animals",
-    name: "Рожеве Порося",
+    name: "Свиня на відгодівлю",
     icon: "🐖",
-    price: 180,
+    price: 450,
     unit: "шт.",
-    description: "Молодняк для відгодівлі на якісне м'ясо",
+    description: "Швидко росте та дає смачне м'ясо",
   },
   {
     id: "cow",
     category: "animals",
     name: "Дійна Корова",
     icon: "🐄",
-    price: 450,
+    price: 1000,
     unit: "шт.",
-    description: "Щодня дає свіже молоко для крафтового сиру",
+    description: "Щодня дає свіже натуральне молоко",
   },
   {
-    id: "ostrich_chick",
+    id: "ostrich",
     category: "animals",
     name: "Екзотичний Страус",
-    icon: "🪶",
-    price: 650,
+    icon: "🦤",
+    price: 7500,
     unit: "шт.",
-    description: "Дає рідкісне цінне пір'я та гігантські яйця",
+    description: "Дає рідкісне пір'я та гігантські яйця-велетні",
   },
 
-  // Seeds
+  // 🌱 Насіння
   {
-    id: "seed_potato",
+    id: "seed",
     category: "seeds",
-    name: "Бульби картоплі",
+    name: "Насіння картоплі",
     icon: "🥔",
-    price: 8,
-    unit: "х10 шт.",
-    description: "Високоврожайний сорт для швидкого росту",
-  },
-  {
-    id: "seed_wheat",
-    category: "seeds",
-    name: "Зерно пшениці",
-    icon: "🌾",
-    price: 10,
-    unit: "х10 шт.",
-    description: "Відбірне насіння для посіву на ділянках",
+    price: 20,
+    unit: "шт.",
+    description: "Посадковий матеріал для вашого картопляного поля",
   },
 
-  // Feed
+  // 🥣 Корми
   {
-    id: "grain_feed",
+    id: "grain",
     category: "feed",
     name: "Фуражне зерно",
-    icon: "🥣",
-    price: 5,
-    unit: "х20 порцій",
-    description: "Поживний комбікорм для всіх птахів та тварин",
+    icon: "🌾",
+    price: 15,
+    unit: "порція",
+    description: "Корм для курей та вирощування курчат",
   },
   {
-    id: "hay_feed",
+    id: "hay",
     category: "feed",
-    name: "Запашне сіно",
+    name: "Лугове сіно",
     icon: "🌿",
-    price: 8,
-    unit: "х15 порцій",
-    description: "Лугове сіно для збільшення надоїв молока",
+    price: 25,
+    unit: "порція",
+    description: "Корм для свиней та дійних корів",
+  },
+  {
+    id: "mix",
+    category: "feed",
+    name: "Преміум комбікорм",
+    icon: "🥣",
+    price: 45,
+    unit: "порція",
+    description: "Збагачений мікс для годування страусів",
   },
 
-  // Titles
+  // 👑 Титули
   {
-    id: "title_legend",
+    id: "kucher",
     category: "titles",
-    name: "Титул: Легендарний Агробарон",
-    icon: "👑",
-    price: 2500,
+    name: "Титул: Кучер 🚜",
+    icon: "🚜",
+    price: 3000,
     unit: "ексклюзив",
-    description: "Золота корона та престижний статус у топі фермерів",
+    description: "Початковий почесний ранг господаря",
+  },
+  {
+    id: "agronom",
+    category: "titles",
+    name: "Титул: Агроном 🌾",
+    icon: "🌾",
+    price: 4000,
+    unit: "ексклюзив",
+    description: "Статус досвідченого польового знавця",
+  },
+  {
+    id: "fermer",
+    category: "titles",
+    name: "Титул: Фермер 👨‍🌾",
+    icon: "👨‍🌾",
+    price: 8000,
+    unit: "ексклюзив",
+    description: "Поважний статус власника великого ранчо",
+  },
+  {
+    id: "baron",
+    category: "titles",
+    name: "Титул: Агро-Барон 🎩",
+    icon: "🎩",
+    price: 12000,
+    unit: "ексклюзив",
+    description: "Елітний титул з високим рейтингом",
+  },
+  {
+    id: "korol",
+    category: "titles",
+    name: "Титул: Король Полів 👑",
+    icon: "👑",
+    price: 15000,
+    unit: "ексклюзив",
+    description: "Королівський статус у турнірній таблиці бота",
   },
 ];
 
@@ -129,13 +165,13 @@ export const ShopView: React.FC<{
     triggerHaptic("light");
     setItemCounts((prev) => {
       const current = prev[id] || 1;
-      const next = Math.max(1, Math.min(50, current + delta));
+      const next = Math.max(1, Math.min(100, current + delta));
       return { ...prev, [id]: next };
     });
   };
 
   const handleBuy = async (item: ShopItem) => {
-    const count = itemCounts[item.id] || 1;
+    const count = item.category === "titles" ? 1 : itemCounts[item.id] || 1;
     const totalCost = item.price * count;
     if (balance < totalCost) return;
 
@@ -152,9 +188,8 @@ export const ShopView: React.FC<{
     await onAction("shop_buy", { item: item.id, count });
   };
 
-  const filteredItems = selectedCategory === "all"
-    ? SHOP_ITEMS
-    : SHOP_ITEMS.filter((item) => item.category === selectedCategory);
+  const filteredItems =
+    selectedCategory === "all" ? SHOP_ITEMS : SHOP_ITEMS.filter((item) => item.category === selectedCategory);
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-xl mx-auto px-3">
@@ -167,10 +202,10 @@ export const ShopView: React.FC<{
             </div>
             <div>
               <h2 className="font-['Fredoka'] font-bold text-lg text-yellow-300 leading-tight">
-                Фермерська Крамниця
+                Крамниця Агронома
               </h2>
               <span className="text-xs text-amber-200/80">
-                Купуйте тварин, насіння, корми та унікальні титули
+                Офіційні товари та тварини @agronom11_bot
               </span>
             </div>
           </div>
@@ -219,7 +254,7 @@ export const ShopView: React.FC<{
       {/* Items Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         {filteredItems.map((item) => {
-          const count = itemCounts[item.id] || 1;
+          const count = item.category === "titles" ? 1 : itemCounts[item.id] || 1;
           const totalCost = item.price * count;
           const canAfford = balance >= totalCost;
 
@@ -287,7 +322,7 @@ export const ShopView: React.FC<{
                   }`}
                 >
                   <ShoppingBag className="w-3.5 h-3.5" />
-                  Купити ({count > 1 ? `${count} од. за ` : ""}🪙 {totalCost})
+                  Купити {count > 1 ? `(${count} шт.) ` : ""}за 🪙 {totalCost}
                 </button>
               </div>
             </div>

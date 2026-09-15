@@ -1,82 +1,163 @@
 import React, { useState } from "react";
 import { useGameStore } from "../../store/gameStore";
 import { triggerHaptic } from "../../services/telegram";
-import { Coins, TrendingUp, Store, DollarSign, Sparkles } from "lucide-react";
+import { Coins, TrendingUp, DollarSign, Store } from "lucide-react";
 import confetti from "canvas-confetti";
 
-interface MarketItemConfig {
+interface MarketProductItem {
   id: string;
+  type: "product" | "animal" | "wheat";
   name: string;
   icon: string;
   unit: string;
   desc: string;
   getStock: (state: any) => number;
-  getPrice: (state: any) => number;
+  price: number;
 }
 
-const MARKET_ITEMS: MarketItemConfig[] = [
+const MARKET_ITEMS: MarketProductItem[] = [
+  // 🧺 Продукція (акція: sell_product)
   {
-    id: "potato",
-    name: "Відбірна картопля",
-    icon: "🥔",
-    unit: "кг",
-    desc: "Свіжий врожай з власного поля",
-    getStock: (s) => s.farm.potato.count,
-    getPrice: (s) => s.economy.prices.potato,
-  },
-  {
-    id: "egg",
-    name: "Фермерські яйця",
+    id: "eggs",
+    type: "product",
+    name: "Курячі яйця",
     icon: "🥚",
     unit: "шт.",
-    desc: "Свіжі яйця домашніх курей",
+    desc: "Свіжі яйця з курника",
     getStock: (s) => s.farm.chickens.eggs,
-    getPrice: (s) => s.economy.prices.egg,
+    price: 30,
+  },
+  {
+    id: "potato",
+    type: "product",
+    name: "Картопля",
+    icon: "🥔",
+    unit: "кг",
+    desc: "Викопаний врожай з поля",
+    getStock: (s) => s.farm.potato.count,
+    price: 70,
   },
   {
     id: "milk",
-    name: "Незбиране молоко",
+    type: "product",
+    name: "Свіже молоко",
     icon: "🥛",
     unit: "л",
-    desc: "Натуральне молоко відгодованих корів",
+    desc: "Натуральне коров'яче молоко",
     getStock: (s) => s.farm.cows.milk,
-    getPrice: (s) => s.economy.prices.milk,
-  },
-  {
-    id: "cheese",
-    name: "Витриманий сир",
-    icon: "🧀",
-    unit: "головок",
-    desc: "Крафтовий сир найвищого ґатунку",
-    getStock: (s) => s.farm.cows.cheese,
-    getPrice: (s) => s.economy.prices.cheese,
+    price: 200,
   },
   {
     id: "meat",
-    name: "Свіжа свинина",
+    type: "product",
+    name: "Свіже м'ясо",
     icon: "🥩",
     unit: "кг",
-    desc: "Відбірне м'ясо з власного свинарника",
+    desc: "Відбірна свинина з ферми",
     getStock: (s) => s.farm.pigs.meat,
-    getPrice: (s) => s.economy.prices.meat,
+    price: 150,
   },
   {
-    id: "wheat",
-    name: "Золота пшениця",
-    icon: "🌾",
-    unit: "снопів",
-    desc: "Зерно з елеватора для пекарень",
-    getStock: (s) => s.wheat.granary_used,
-    getPrice: (s) => s.economy.prices.wheat,
+    id: "cheese",
+    type: "product",
+    name: "Домашній сир",
+    icon: "🧀",
+    unit: "шт.",
+    desc: "Крафтовий витриманий сир",
+    getStock: (s) => s.farm.cows.cheese,
+    price: 1200,
   },
   {
-    id: "ostrich_feather",
+    id: "feather",
+    type: "product",
     name: "Страусине пір'я",
     icon: "🪶",
     unit: "шт.",
-    desc: "Екзотична прикраса для кутюр'є",
+    desc: "Цінне декоративне пір'я",
     getStock: (s) => s.farm.ostriches.feathers,
-    getPrice: (s) => s.economy.prices.ostrich_feather,
+    price: 550,
+  },
+  {
+    id: "ostrich_egg",
+    type: "product",
+    name: "Страусине яйце",
+    icon: "🥚",
+    unit: "шт.",
+    desc: "Рідкісне велетенське яйце",
+    getStock: (s) => s.farm.ostriches.eggs,
+    price: 2200,
+  },
+  {
+    id: "wheat",
+    type: "wheat",
+    name: "Снопи пшениці",
+    icon: "🌾",
+    unit: "т",
+    desc: "Зерно з елеватора",
+    getStock: (s) => s.wheat.granary_used,
+    price: 45,
+  },
+
+  // 🐾 Тварини на продаж (акція: sell_animal)
+  {
+    id: "chick",
+    type: "animal",
+    name: "Продати курчат",
+    icon: "🐤",
+    unit: "голів",
+    desc: "Молодняк курчат",
+    getStock: (s) => s.farm.chickens.chicks,
+    price: 40,
+  },
+  {
+    id: "chicken",
+    type: "animal",
+    name: "Продати курей",
+    icon: "🐔",
+    unit: "голів",
+    desc: "Дорослі кури-несучки",
+    getStock: (s) => s.farm.chickens.count,
+    price: 60,
+  },
+  {
+    id: "rooster",
+    type: "animal",
+    name: "Продати півнів",
+    icon: "🐓",
+    unit: "голів",
+    desc: "Півні з курника",
+    getStock: (s) => s.farm.chickens.roosters,
+    price: 180,
+  },
+  {
+    id: "pig",
+    type: "animal",
+    name: "Продати свиней",
+    icon: "🐖",
+    unit: "голів",
+    desc: "Дорослі свині",
+    getStock: (s) => s.farm.pigs.count,
+    price: 280,
+  },
+  {
+    id: "cow",
+    type: "animal",
+    name: "Продати корів",
+    icon: "🐄",
+    unit: "голів",
+    desc: "Дійні корови",
+    getStock: (s) => s.farm.cows.count,
+    price: 600,
+  },
+  {
+    id: "ostrich",
+    type: "animal",
+    name: "Продати страусів",
+    icon: "🪶",
+    unit: "голів",
+    desc: "Страуси з вольєра",
+    getStock: (s) => s.farm.ostriches.count,
+    price: 4000,
   },
 ];
 
@@ -85,6 +166,7 @@ export const MarketView: React.FC<{
   isLoading?: boolean;
 }> = ({ onAction, isLoading = false }) => {
   const { gameState } = useGameStore();
+  const [activeTab, setActiveTab] = useState<"products" | "animals">("products");
   const [quantities, setQuantities] = useState<Record<string, number>>({});
 
   if (!gameState) return null;
@@ -93,7 +175,7 @@ export const MarketView: React.FC<{
     setQuantities((prev) => ({ ...prev, [id]: value }));
   };
 
-  const handleSell = async (item: MarketItemConfig, countToSell: number) => {
+  const handleSell = async (item: MarketProductItem, countToSell: number) => {
     if (countToSell <= 0) return;
     triggerHaptic("heavy");
     try {
@@ -104,18 +186,27 @@ export const MarketView: React.FC<{
         colors: ["#f59e0b", "#fbbf24", "#10b981"],
       });
     } catch {}
-    await onAction("market_sell", { item: item.id, count: countToSell });
-    // Reset quantity slider
+
+    if (item.type === "animal") {
+      await onAction("sell_animal", { item: item.id, count: countToSell });
+    } else if (item.type === "wheat") {
+      await onAction("wheat_sell_local", { count: countToSell });
+    } else {
+      await onAction("sell_product", { item: item.id, count: countToSell });
+    }
+
     setQuantities((prev) => ({ ...prev, [item.id]: 1 }));
   };
 
-  // Calculate total inventory value
   let totalInventoryValue = 0;
-  MARKET_ITEMS.forEach((item) => {
+  MARKET_ITEMS.filter((i) => i.type === "product" || i.type === "wheat").forEach((item) => {
     const stock = item.getStock(gameState);
-    const price = item.getPrice(gameState);
-    totalInventoryValue += stock * price;
+    totalInventoryValue += stock * item.price;
   });
+
+  const displayedItems = MARKET_ITEMS.filter((item) =>
+    activeTab === "products" ? item.type === "product" || item.type === "wheat" : item.type === "animal"
+  );
 
   return (
     <div className="flex flex-col gap-4 pb-24 max-w-xl mx-auto px-3">
@@ -131,14 +222,14 @@ export const MarketView: React.FC<{
                 Агро-Ярмарок (Ринок)
               </h2>
               <span className="text-xs text-emerald-200/80">
-                Продавайте свою продукцію оптом та вроздріб
+                Офіційні ціни скупки продукції та тварин
               </span>
             </div>
           </div>
 
           <div className="text-right">
             <span className="text-[10px] text-emerald-300 font-bold uppercase tracking-wider">
-              Вартість запасів
+              Вартість складу
             </span>
             <div className="font-['Fredoka'] font-bold text-base text-yellow-300 flex items-center justify-end gap-1">
               <Coins className="w-4 h-4 text-amber-400" />
@@ -147,25 +238,43 @@ export const MarketView: React.FC<{
           </div>
         </div>
 
-        {/* Live Market Trend Ticker */}
-        <div className="mt-3 bg-[#0d2212]/90 rounded-2xl px-3 py-2 border border-emerald-700/50 flex items-center justify-between text-xs">
-          <span className="flex items-center gap-1.5 text-emerald-300 font-semibold">
-            <TrendingUp className="w-4 h-4 text-emerald-400" />
-            Котирування біржі:
-          </span>
-          <span className="text-yellow-300 font-medium truncate text-[11px]">
-            🔥 Високий попит на 🧀 Сир (+15%) та 🌾 Пшеницю
-          </span>
+        {/* Tab switchers */}
+        <div className="grid grid-cols-2 gap-2 mt-3 bg-[#0c1d10] p-1 rounded-2xl border border-emerald-800">
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("products");
+            }}
+            className={`py-2 rounded-xl text-xs font-['Fredoka'] font-bold transition-all ${
+              activeTab === "products"
+                ? "bg-gradient-to-b from-amber-500 to-amber-600 text-amber-950 shadow-md border border-amber-300"
+                : "text-emerald-200/80 hover:bg-emerald-900/40"
+            }`}
+          >
+            🧺 Продукція та врожай
+          </button>
+          <button
+            onClick={() => {
+              triggerHaptic("light");
+              setActiveTab("animals");
+            }}
+            className={`py-2 rounded-xl text-xs font-['Fredoka'] font-bold transition-all ${
+              activeTab === "animals"
+                ? "bg-gradient-to-b from-amber-500 to-amber-600 text-amber-950 shadow-md border border-amber-300"
+                : "text-emerald-200/80 hover:bg-emerald-900/40"
+            }`}
+          >
+            🐾 Продаж тварин
+          </button>
         </div>
       </div>
 
       {/* Produce Items List */}
       <div className="flex flex-col gap-3">
-        {MARKET_ITEMS.map((item) => {
+        {displayedItems.map((item) => {
           const stock = item.getStock(gameState);
-          const price = item.getPrice(gameState);
           const currentCount = Math.min(stock, quantities[item.id] ?? (stock > 0 ? 1 : 0));
-          const totalEarn = currentCount * price;
+          const totalEarn = currentCount * item.price;
 
           return (
             <div
@@ -189,7 +298,7 @@ export const MarketView: React.FC<{
                 <div className="text-right">
                   <div className="flex items-center justify-end gap-1 bg-[#132c16] px-2.5 py-1 rounded-xl border border-amber-600/40">
                     <span className="font-['Fredoka'] font-bold text-sm text-yellow-300">
-                      🪙 {price}
+                      🪙 {item.price}
                     </span>
                     <span className="text-[10px] text-amber-200/70">/{item.unit}</span>
                   </div>
@@ -207,7 +316,7 @@ export const MarketView: React.FC<{
                       Кількість до продажу: <strong className="text-yellow-300 font-['Fredoka'] text-sm">{currentCount} {item.unit}</strong>
                     </span>
                     <span className="text-emerald-300 font-bold font-['Fredoka']">
-                      Отримаєте: +🪙 {totalEarn}
+                      Отримаєте: +🪙 {totalEarn.toLocaleString()}
                     </span>
                   </div>
 
@@ -223,9 +332,9 @@ export const MarketView: React.FC<{
                     />
                     <button
                       onClick={() => handleSliderChange(item.id, stock)}
-                      className="text-[10px] bg-emerald-800 hover:bg-emerald-700 active:scale-95 text-amber-200 font-bold px-2 py-1 rounded-lg border border-emerald-600"
+                      className="text-[10px] bg-emerald-800 hover:bg-emerald-700 active:scale-95 text-amber-200 font-bold px-2.5 py-1 rounded-lg border border-emerald-600"
                     >
-                      Макс
+                      Макс ({stock})
                     </button>
                   </div>
 
@@ -237,12 +346,12 @@ export const MarketView: React.FC<{
                     className="w-full mt-1 py-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 active:scale-95 text-amber-950 font-['Fredoka'] font-bold text-xs rounded-xl shadow-md border border-amber-300 flex items-center justify-center gap-1.5 transition-all"
                   >
                     <DollarSign className="w-4 h-4 text-amber-950" />
-                    Продати {currentCount} {item.unit} за 🪙 {totalEarn}
+                    Продати {currentCount} {item.unit} за 🪙 {totalEarn.toLocaleString()}
                   </button>
                 </div>
               ) : (
                 <div className="text-center py-2 text-xs text-gray-400 bg-[#162e19] rounded-xl border border-emerald-900/50">
-                  Немає готової продукції на складі. Виростіть або збережіть на фермі!
+                  Немає у наявності для продажу
                 </div>
               )}
             </div>
