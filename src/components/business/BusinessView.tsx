@@ -203,12 +203,13 @@ export const BusinessView: React.FC<{
 
                   <div className="flex items-center justify-between pt-2 border-t border-emerald-800/60 text-xs">
                     <span className="text-[11px] text-emerald-300">
-                      Команда в боті: <code>Гусь бізнес</code>
+                      Команда в боті: <code>Гусь бізнес {b.id}</code>
                     </span>
                     <button
+                      id={`btn-buy-biz-${b.id}`}
                       onClick={() => {
                         triggerHaptic("medium");
-                        onAction("shop_buy", { item: b.id, count: 1 }).catch(() => {});
+                        onAction("buy_business", { item: b.id, business: b.id, count: 1 }).catch(() => {});
                       }}
                       disabled={isLoading || !canAfford}
                       className={`px-3 py-1.5 rounded-xl font-['Fredoka'] font-bold text-xs shadow-md border flex items-center gap-1 transition-all ${
