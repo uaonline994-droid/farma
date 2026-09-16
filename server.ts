@@ -7,22 +7,10 @@ dotenv.config();
 
 const app = express();
 const PORT = 3000;
-const PYTHON_BACKEND_URL = "https://artemfurry.pythonanywhere.com";
 
-app.use(express.json({ limit: "5mb" }));
+app.use(express.json());
 
-// Allow CORS for Telegram WebApp from any origin
-app.use((req, res, next) => {
-  res.header("Access-Control-Allow-Origin", "*");
-  res.header("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Telegram-Init-Data, X-Init-Data, X-Telegram-User-Id, X-Telegram-User-Name");
-  res.header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-  next();
-});
-
-// In-memory persistent database for preview / fallback mode
+// In-memory persistent database for state if no external backend is connected
 interface UserSessionData {
   userId: number;
   chatId: number;
@@ -37,7 +25,7 @@ interface UserSessionData {
   farm: {
     potato: {
       planted_at: number;
-      growth_duration: number;
+      growth_duration: number; // in seconds
       count: number;
       max_count: number;
     };
@@ -102,8 +90,8 @@ interface UserSessionData {
   wheat: {
     plots: Array<{
       id: number;
-      planted_at: number;
-      duration: number;
+      planted_at: number; // 0 if empty
+      duration: number; // seconds to full growth
     }>;
     granary_used: number;
     granary_max: number;
@@ -146,73 +134,73 @@ function createDefaultState(userId = 1001, name = "Фермер"): UserSessionDa
     tag: "Агроном 🌾",
     level: {
       current: 1,
-      xp: 40,
-      next_level_xp: 500,
+      xp: 0,
+      next_level_xp: 100,
       title: "Фермер-початківець",
     },
     farm: {
       potato: {
         planted_at: 0,
-        growth_duration: 30,
+        growth_duration: 30, // 30s
         count: 0,
-        max_count: 5000,
+        max_count: 50,
       },
       chickens: {
-        count: 5,
-        chicks: 2,
-        roosters: 1,
-        eggs: 6,
-        max_capacity: 5000,
+        count: 0,
+        chicks: 0,
+        roosters: 0,
+        eggs: 0,
+        max_capacity: 20,
         feed_level: 100,
         last_feed_time: Date.now(),
       },
       pigs: {
-        count: 2,
+        count: 0,
         piglets: 0,
-        meat: 4,
+        meat: 0,
         feed_level: 100,
         last_feed_time: Date.now(),
       },
       cows: {
-        count: 1,
-        milk: 12,
-        cheese: 2,
+        count: 0,
+        milk: 0,
+        cheese: 0,
         feed_level: 100,
         last_feed_time: Date.now(),
       },
       ostriches: {
-        count: 1,
-        feathers: 3,
-        eggs: 1,
+        count: 0,
+        feathers: 0,
+        eggs: 0,
         feed_level: 100,
         last_feed_time: Date.now(),
       },
     },
     economy: {
-      balance: 1500,
+      balance: 150,
       gems: 0,
       storage: {
-        used: 28,
-        max: 10000,
+        used: 0,
+        max: 100,
       },
       prices: {
-        potato: 70,
-        egg: 30,
-        milk: 200,
-        cheese: 1200,
-        meat: 150,
-        ostrich_feather: 550,
-        ostrich_egg: 2200,
-        wheat: 45,
+        potato: 12,
+        egg: 8,
+        milk: 22,
+        cheese: 65,
+        meat: 55,
+        ostrich_feather: 140,
+        ostrich_egg: 190,
+        wheat: 16,
       },
       feed_stock: {
-        grain: 120,
-        hay: 80,
-        premium: 20,
+        grain: 0,
+        hay: 0,
+        premium: 0,
       },
       seed_stock: {
-        potato: 50,
-        wheat: 40,
+        potato: 5,
+        wheat: 5,
       },
     },
     wheat: {
@@ -234,9 +222,9 @@ function createDefaultState(userId = 1001, name = "Фермер"): UserSessionDa
         { id: 15, planted_at: 0, duration: 45 },
         { id: 16, planted_at: 0, duration: 45 },
       ],
-      granary_used: 15,
-      granary_max: 500,
-      total_harvested: 15,
+      granary_used: 0,
+      granary_max: 100,
+      total_harvested: 0,
     },
     workers: {
       hired: 0,
@@ -254,8 +242,8 @@ function createDefaultState(userId = 1001, name = "Фермер"): UserSessionDa
           description: "Потрібно 10 снопів пшениці для свіжого хліба",
           req_item: "wheat",
           req_count: 10,
-          reward_coins: 500,
-          reward_xp: 120,
+          reward_coins: 250,
+          reward_xp: 80,
           fulfilled: false,
         },
         {
@@ -264,8 +252,28 @@ function createDefaultState(userId = 1001, name = "Фермер"): UserSessionDa
           description: "Замовлення на 8 свіжих фермерських яєць",
           req_item: "egg",
           req_count: 8,
-          reward_coins: 300,
-          reward_xp: 80,
+          reward_coins: 140,
+          reward_xp: 60,
+          fulfilled: false,
+        },
+        {
+          id: "c3",
+          title: "Крафтова сироварня",
+          description: "Партія з 2 головок витриманого сиру",
+          req_item: "cheese",
+          req_count: 2,
+          reward_coins: 260,
+          reward_xp: 100,
+          fulfilled: false,
+        },
+        {
+          id: "c4",
+          title: "Екзотичний ресторан 'Оазис'",
+          description: "Потрібно 2 страусині яйця для фірмового омлету",
+          req_item: "ostrich_egg",
+          req_count: 2,
+          reward_coins: 600,
+          reward_xp: 200,
           fulfilled: false,
         },
       ],
@@ -293,7 +301,7 @@ function parseTelegramUser(initData: string) {
 }
 
 function getSessionKey(req: Request): string {
-  const initData = (req.headers["x-telegram-init-data"] as string) || (req.headers["x-init-data"] as string) || "";
+  const initData = (req.headers["x-telegram-init-data"] as string) || "";
   const user = parseTelegramUser(initData);
   if (user && user.id) {
     return `tg_${user.id}`;
@@ -308,7 +316,7 @@ function getSessionKey(req: Request): string {
 function getOrCreateSession(req: Request): UserSessionData {
   const key = getSessionKey(req);
   if (!sessions.has(key)) {
-    const initData = (req.headers["x-telegram-init-data"] as string) || (req.headers["x-init-data"] as string) || "";
+    const initData = (req.headers["x-telegram-init-data"] as string) || "";
     const user = parseTelegramUser(initData);
     const customId = req.headers["x-telegram-user-id"] as string;
     const customName = req.headers["x-telegram-user-name"] as string;
@@ -329,72 +337,8 @@ function getOrCreateSession(req: Request): UserSessionData {
   return sessions.get(key)!;
 }
 
-// Helper to proxy requests directly to PythonAnywhere bot backend
-async function forwardToPythonBackend(endpoint: string, method: string, req: Request, res: Response): Promise<boolean> {
-  const initData = (req.headers["x-telegram-init-data"] as string) || (req.headers["x-init-data"] as string);
-  
-  // If there's no initData at all (e.g. web browser preview), fallback to local mock server
-  if (!initData) {
-    return false;
-  }
-
-  try {
-    const forwardHeaders: Record<string, string> = {
-      "Content-Type": "application/json",
-      "X-Telegram-Init-Data": initData,
-      "X-Init-Data": initData,
-    };
-
-    const targetUrl = `${PYTHON_BACKEND_URL}${endpoint}`;
-    const options: RequestInit = {
-      method,
-      headers: forwardHeaders,
-    };
-
-    if (method !== "GET" && method !== "HEAD") {
-      options.body = JSON.stringify(req.body || {});
-    }
-
-    const remoteRes = await fetch(targetUrl, options);
-    const responseData = await remoteRes.json().catch(() => null);
-
-    if (remoteRes.ok && responseData) {
-      res.status(remoteRes.status).json(responseData);
-      return true;
-    }
-
-    if (remoteRes.status === 401 || remoteRes.status === 400 || remoteRes.status === 503) {
-      // Backend returned auth error or action error
-      res.status(remoteRes.status).json(responseData || { ok: false, error: "Backend error" });
-      return true;
-    }
-  } catch (err) {
-    console.error(`Error forwarding request to ${endpoint}:`, err);
-  }
-  return false;
-}
-
-// Health check endpoint
-app.get(["/health", "/api/health"], async (_req: Request, res: Response) => {
-  try {
-    const ping = await fetch(`${PYTHON_BACKEND_URL}/health`, { method: "GET" }).catch(() => null);
-    const isRemoteAlive = ping?.ok ?? false;
-    res.json({
-      ok: true,
-      status: "healthy",
-      backend: "https://artemfurry.pythonanywhere.com",
-      remote_alive: isRemoteAlive,
-    });
-  } catch {
-    res.json({ ok: true, status: "healthy", backend_offline: true });
-  }
-});
-
 // 1. POST /api/auth
-app.post("/api/auth", async (req: Request, res: Response) => {
-  const forwarded = await forwardToPythonBackend("/api/auth", "POST", req, res);
-  if (forwarded) return;
-
+app.post("/api/auth", (req: Request, res: Response) => {
   const { initData, customUserId, customUserName } = req.body || {};
   const user = parseTelegramUser(initData);
 
@@ -409,7 +353,7 @@ app.post("/api/auth", async (req: Request, res: Response) => {
       ok: true,
       chat_id: userId,
       user_id: userId,
-      name,
+      user_name: name,
     });
   }
 
@@ -426,31 +370,34 @@ app.post("/api/auth", async (req: Request, res: Response) => {
       ok: true,
       chat_id: userId,
       user_id: userId,
-      name,
+      user_name: name,
     });
   }
 
+  const defaultKey = "farmer_session";
+  if (!sessions.has(defaultKey)) {
+    sessions.set(defaultKey, createDefaultState(1001, "Фермер"));
+  }
   return res.json({
     ok: true,
     chat_id: 1001,
     user_id: 1001,
-    name: "Фермер",
+    user_name: "Фермер",
   });
 });
 
-// 2. GET and POST /api/state
-app.all("/api/state", async (req: Request, res: Response) => {
-  const forwarded = await forwardToPythonBackend("/api/state", req.method === "GET" ? "GET" : "POST", req, res);
-  if (forwarded) return;
-
+// 2. GET /api/state
+app.get("/api/state", (req: Request, res: Response) => {
   const session = getOrCreateSession(req);
   const now = Date.now();
 
+  // Dynamic calculations for potato
   const potato = session.farm.potato;
   const potatoElapsed = (now - potato.planted_at) / 1000;
   const potatoReady = potato.planted_at > 0 && potatoElapsed >= potato.growth_duration;
   const potatoProgress = potato.planted_at > 0 ? Math.min(100, Math.round((potatoElapsed / potato.growth_duration) * 100)) : 0;
 
+  // Dynamic calculations for wheat plots
   const computedWheatPlots = session.wheat.plots.map((plot) => {
     if (plot.planted_at === 0) {
       return { ...plot, stage: 0, ready: false, progress: 0 };
@@ -467,46 +414,49 @@ app.all("/api/state", async (req: Request, res: Response) => {
       stage,
       ready: progress >= 100,
       progress,
+      harvest_yield: 5 + (session.business.upgrades.tractor || 0) * 2,
     };
   });
 
   return res.json({
-    ok: true,
-    user: {
-      id: session.userId,
-      name: session.name,
-    },
-    state: {
-      farm: {
-        ...session.farm,
-        potato: {
-          ...potato,
-          ready: potatoReady,
-          growth_progress: potatoProgress,
-          seconds_left: Math.max(0, Math.round(potato.growth_duration - potatoElapsed)),
-        },
+    farm: {
+      ...session.farm,
+      potato: {
+        ...potato,
+        ready: potatoReady,
+        growth_progress: potatoProgress,
+        seconds_left: Math.max(0, Math.round(potato.growth_duration - potatoElapsed)),
       },
-      economy: session.economy,
-      wheat: {
-        ...session.wheat,
-        plots: computedWheatPlots,
-      },
-      workers: session.workers,
-      business: session.business,
-      tag: session.tag,
-      level: session.level,
-      prices: session.economy.prices,
     },
+    economy: session.economy,
+    wheat: {
+      ...session.wheat,
+      plots: computedWheatPlots,
+    },
+    workers: session.workers,
+    business: session.business,
+    tag: session.tag,
+    level: session.level,
   });
 });
 
-// 3. POST /api/action
-app.post("/api/action", async (req: Request, res: Response) => {
-  const forwarded = await forwardToPythonBackend("/api/action", "POST", req, res);
-  if (forwarded) return;
+// Add XP helper
+function addXp(session: UserSessionData, xpGain: number): { leveledUp: boolean; newLevel: number } {
+  session.level.xp += xpGain;
+  let leveledUp = false;
+  while (session.level.xp >= session.level.next_level_xp) {
+    session.level.xp -= session.level.next_level_xp;
+    session.level.current += 1;
+    session.level.next_level_xp = Math.round(session.level.next_level_xp * 1.35);
+    leveledUp = true;
+  }
+  return { leveledUp, newLevel: session.level.current };
+}
 
+// 3. POST /api/action
+app.post("/api/action", (req: Request, res: Response) => {
   const session = getOrCreateSession(req);
-  const { action, count, item } = req.body || {};
+  const { action, count, item, plot_id, contract_id } = req.body || {};
   const amount = Number(count) || 1;
   const now = Date.now();
 
@@ -514,185 +464,229 @@ app.post("/api/action", async (req: Request, res: Response) => {
     case "plant_potato": {
       const neededSeeds = amount;
       if (session.economy.seed_stock.potato < neededSeeds) {
-        return res.status(400).json({ ok: false, error: "Не вистачає насіння картоплі в коморі!" });
+        return res.status(400).json({ ok: false, message: "Не вистачає насіння картоплі в коморі!" });
       }
       session.economy.seed_stock.potato -= neededSeeds;
       session.farm.potato.planted_at = now;
       session.farm.potato.count = neededSeeds;
-      return res.json({ ok: true, result: `🥔 Посаджено ${neededSeeds} кущів картоплі!` });
+      return res.json({ ok: true, message: `🥔 Посаджено ${neededSeeds} кущів картоплі! Полив завершено.` });
     }
 
-    case "collect_farm":
-    case "collect":
-    case "collect_all": {
+    case "collect": {
+      // Collect all ready harvests: potato + eggs + milk + wheat ready
       let collectedItems: string[] = [];
+      let totalXp = 0;
 
+      // 1. Potato
       const potatoElapsed = (now - session.farm.potato.planted_at) / 1000;
       if (session.farm.potato.planted_at > 0 && potatoElapsed >= session.farm.potato.growth_duration) {
         const yieldAmount = session.farm.potato.count * 3;
-        session.farm.potato.count = 0;
-        session.farm.potato.planted_at = 0;
         session.economy.storage.used += yieldAmount;
-        collectedItems.push(`🥔 ${yieldAmount} картоплі`);
+        collectedItems.push(`🥔 ${yieldAmount} шт. картоплі`);
+        totalXp += 40;
+        session.farm.potato.planted_at = 0;
+        session.farm.potato.count = 0;
       }
 
+      // 2. Chickens (eggs)
       if (session.farm.chickens.eggs > 0) {
         const eggs = session.farm.chickens.eggs;
         session.economy.storage.used += eggs;
         collectedItems.push(`🥚 ${eggs} яєць`);
+        totalXp += eggs * 2;
         session.farm.chickens.eggs = 0;
       }
 
+      // 3. Cows (milk)
       if (session.farm.cows.milk > 0) {
         const milk = session.farm.cows.milk;
         session.economy.storage.used += milk;
         collectedItems.push(`🥛 ${milk} л молока`);
+        totalXp += milk * 4;
         session.farm.cows.milk = 0;
       }
 
+      // 4. Ostriches (feathers)
       if (session.farm.ostriches.feathers > 0) {
         const feathers = session.farm.ostriches.feathers;
         session.economy.storage.used += feathers;
         collectedItems.push(`🪶 ${feathers} пір'їн`);
+        totalXp += feathers * 8;
         session.farm.ostriches.feathers = 0;
       }
 
       if (collectedItems.length === 0) {
-        return res.json({ ok: true, result: "Наразі немає готової продукції для збору." });
+        return res.json({ ok: true, message: "Наразі немає готової продукції для збору. Зачекайте трохи!" });
       }
 
+      addXp(session, totalXp);
       return res.json({
         ok: true,
-        result: `🌾 Успішно зібрано: ${collectedItems.join(", ")}!`,
+        message: `🌾 Успішно зібрано: ${collectedItems.join(", ")}! (+${totalXp} XP)`,
       });
     }
 
     case "slaughter": {
       if (session.farm.pigs.count < amount) {
-        return res.status(400).json({ ok: false, error: "Немає стільки свиней для забою!" });
+        return res.status(400).json({ ok: false, message: "Немає стільки свиней для забою!" });
       }
       session.farm.pigs.count -= amount;
       const meatYield = amount * 18;
       session.farm.pigs.meat += meatYield;
+      session.economy.storage.used += meatYield;
+      addXp(session, amount * 35);
       return res.json({
         ok: true,
-        result: `🥩 Отримано ${meatYield} кг свіжого м'яса свинини!`,
+        message: `🥩 Отримано ${meatYield} кг відбірного м'яса свинини!`,
       });
     }
 
     case "cheese": {
-      const milkNeeded = 10;
+      const milkNeeded = amount * 3;
       if (session.farm.cows.milk < milkNeeded) {
-        return res.status(400).json({ ok: false, error: "Потрібно 10 л молока для виготовлення сиру!" });
+        return res.status(400).json({ ok: false, message: `Потрібно ${milkNeeded} л молока для виготовлення ${amount} головок сиру!` });
       }
       session.farm.cows.milk -= milkNeeded;
-      session.farm.cows.cheese += 1;
+      session.farm.cows.cheese += amount;
+      addXp(session, amount * 25);
       return res.json({
         ok: true,
-        result: `🧀 Приготовлено 1 головку свіжого сиру!`,
+        message: `🧀 Приготовлено ${amount} головок витриманого фермерського сиру!`,
       });
     }
 
     case "breed": {
+      // Breed animals
       if (session.farm.chickens.count >= 2 && session.farm.chickens.roosters >= 1) {
         session.farm.chickens.chicks += 2;
-        return res.json({ ok: true, result: "🐣 У курнику вилупилося 2 курчат!" });
+        addXp(session, 30);
+        return res.json({ ok: true, message: "🐣 У курнику вилупилося 2 нових курчат!" });
       }
-      return res.status(400).json({ ok: false, error: "Потрібно щонайменше 2 курки та 1 півень!" });
+      return res.status(400).json({ ok: false, message: "Для розведення потрібні щонайменше 2 курки та 1 півень!" });
     }
 
-    case "raise_chicks":
     case "raise": {
+      // Grow young animals
       if (session.farm.chickens.chicks > 0) {
         const chicksCount = session.farm.chickens.chicks;
         session.farm.chickens.chicks = 0;
         session.farm.chickens.count += chicksCount;
-        return res.json({ ok: true, result: `🐓 ${chicksCount} курчат виросли у дорослих курей!` });
+        return res.json({ ok: true, message: `🐓 ${chicksCount} курчат виросли у дорослих курей!` });
       }
-      return res.json({ ok: true, result: "Усі птахи вже дорослі." });
+      if (session.farm.pigs.piglets > 0) {
+        const count = session.farm.pigs.piglets;
+        session.farm.pigs.piglets = 0;
+        session.farm.pigs.count += count;
+        return res.json({ ok: true, message: `🐖 ${count} поросят підросли!` });
+      }
+      return res.json({ ok: true, message: "Всі молоді тварини вже доглянуті та ростуть згідно графіка." });
+    }
+
+    case "feed_animals": {
+      const target = req.body.target || "all";
+      if (session.economy.feed_stock.grain < 10) {
+        return res.status(400).json({ ok: false, message: "Не вистачає зерна в коморі! Купіть у Магазині." });
+      }
+      session.economy.feed_stock.grain -= 10;
+      session.farm.chickens.feed_level = 100;
+      session.farm.chickens.eggs += Math.min(12, session.farm.chickens.count * 2);
+      session.farm.cows.feed_level = 100;
+      session.farm.cows.milk += session.farm.cows.count * 3;
+      addXp(session, 25);
+      return res.json({ ok: true, message: "🥣 Тварин ситно нагодовано! Продуктивність ферми зросла." });
     }
 
     case "shop_buy": {
       const shopPrices: Record<string, number> = {
-        seed: 8,
-        potato_seed: 8,
-        wheat_seed: 10,
-        grain: 5,
-        hay: 8,
-        mix: 25,
-        chicken: 45,
+        seed_potato: 8,
+        seed_wheat: 10,
+        grain_feed: 5,
+        hay_feed: 8,
+        chick: 45,
         rooster: 120,
-        pig: 180,
+        piglet: 180,
         cow: 450,
-        ostrich: 650,
+        ostrich_chick: 650,
+        title_legend: 2500,
       };
 
       const pricePerUnit = shopPrices[item] || 50;
       const totalCost = pricePerUnit * amount;
 
       if (session.economy.balance < totalCost) {
-        return res.status(400).json({ ok: false, error: `Не вистачає монет! Потрібно 🪙 ${totalCost}, у вас 🪙 ${session.economy.balance}` });
+        return res.status(400).json({ ok: false, message: `Не вистачає монет! Потрібно 🪙 ${totalCost}, у вас 🪙 ${session.economy.balance}` });
       }
 
       session.economy.balance -= totalCost;
 
-      if (item === "seed" || item === "potato_seed") session.economy.seed_stock.potato += amount;
-      else if (item === "wheat_seed") session.economy.seed_stock.wheat += amount;
-      else if (item === "grain") session.economy.feed_stock.grain += amount;
-      else if (item === "hay") session.economy.feed_stock.hay += amount;
-      else if (item === "mix") session.economy.feed_stock.premium += amount;
-      else if (item === "chicken") session.farm.chickens.count += amount;
+      if (item === "seed_potato") session.economy.seed_stock.potato += amount * 10;
+      else if (item === "seed_wheat") session.economy.seed_stock.wheat += amount * 10;
+      else if (item === "grain_feed") session.economy.feed_stock.grain += amount * 20;
+      else if (item === "hay_feed") session.economy.feed_stock.hay += amount * 15;
+      else if (item === "chick") session.farm.chickens.chicks += amount;
       else if (item === "rooster") session.farm.chickens.roosters += amount;
-      else if (item === "pig") session.farm.pigs.count += amount;
+      else if (item === "piglet") session.farm.pigs.piglets += amount;
       else if (item === "cow") session.farm.cows.count += amount;
-      else if (item === "ostrich") session.farm.ostriches.count += amount;
+      else if (item === "ostrich_chick") session.farm.ostriches.count += amount;
+      else if (item === "title_legend") session.tag = "Легендарний Агробарон 👑";
 
+      addXp(session, Math.round(totalCost * 0.08));
       return res.json({
         ok: true,
-        result: `🛒 Куплено ${amount} од. товару! Витрачено 🪙 ${totalCost}.`,
+        message: `🛒 Куплено успішно! Витрачено 🪙 ${totalCost}.`,
       });
     }
 
-    case "sell_product":
     case "market_sell": {
       const itemToSell = req.body.item;
       const sellAmount = Number(req.body.count) || 1;
       const prices = session.economy.prices;
 
       let itemPrice = 10;
+      let available = 0;
+
       if (itemToSell === "potato") {
         itemPrice = prices.potato;
-        session.farm.potato.count = Math.max(0, session.farm.potato.count - sellAmount);
-      } else if (itemToSell === "eggs" || itemToSell === "egg") {
+        available = session.farm.potato.count;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає картоплі для продажу!" });
+        session.farm.potato.count -= sellAmount;
+      } else if (itemToSell === "egg") {
         itemPrice = prices.egg;
-        session.farm.chickens.eggs = Math.max(0, session.farm.chickens.eggs - sellAmount);
+        available = session.farm.chickens.eggs;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає яєць!" });
+        session.farm.chickens.eggs -= sellAmount;
       } else if (itemToSell === "milk") {
         itemPrice = prices.milk;
-        session.farm.cows.milk = Math.max(0, session.farm.cows.milk - sellAmount);
+        available = session.farm.cows.milk;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає молока!" });
+        session.farm.cows.milk -= sellAmount;
       } else if (itemToSell === "cheese") {
         itemPrice = prices.cheese;
-        session.farm.cows.cheese = Math.max(0, session.farm.cows.cheese - sellAmount);
+        available = session.farm.cows.cheese;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає сиру!" });
+        session.farm.cows.cheese -= sellAmount;
       } else if (itemToSell === "meat") {
         itemPrice = prices.meat;
-        session.farm.pigs.meat = Math.max(0, session.farm.pigs.meat - sellAmount);
-      } else if (itemToSell === "feather" || itemToSell === "feathers") {
-        itemPrice = prices.ostrich_feather;
-        session.farm.ostriches.feathers = Math.max(0, session.farm.ostriches.feathers - sellAmount);
-      } else if (itemToSell === "ostrich_egg" || itemToSell === "ostrich_eggs") {
-        itemPrice = prices.ostrich_egg;
-        session.farm.ostriches.eggs = Math.max(0, session.farm.ostriches.eggs - sellAmount);
+        available = session.farm.pigs.meat;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає м'яса!" });
+        session.farm.pigs.meat -= sellAmount;
+      } else if (itemToSell === "wheat") {
+        itemPrice = prices.wheat;
+        available = session.wheat.granary_used;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає пшениці у сховищі!" });
+        session.wheat.granary_used -= sellAmount;
       }
 
       const earnings = itemPrice * sellAmount;
       session.economy.balance += earnings;
+      addXp(session, Math.round(earnings * 0.05));
 
       return res.json({
         ok: true,
-        result: `💰 Продано ${sellAmount} од. за 🪙 ${earnings}!`,
+        message: `💰 Продано ${sellAmount} од. на ринку за 🪙 ${earnings}!`,
       });
     }
 
-    case "wheat_plant":
     case "plant_wheat_all": {
       let plantedCount = 0;
       session.wheat.plots.forEach((plot) => {
@@ -702,60 +696,109 @@ app.post("/api/action", async (req: Request, res: Response) => {
           plantedCount++;
         }
       });
-      return res.json({ ok: true, result: `🌾 Засіяно ${plantedCount} ділянок пшениці!` });
+      if (plantedCount === 0) {
+        return res.status(400).json({ ok: false, message: "Немає вільних ділянок або закінчилося насіння пшениці!" });
+      }
+      return res.json({ ok: true, message: `🌾 Засіяно ${plantedCount} ділянок пшениці!` });
     }
 
-    case "wheat_collect":
     case "harvest_wheat_all": {
       let harvestedCount = 0;
       let totalYield = 0;
       session.wheat.plots.forEach((plot) => {
         const elapsed = (now - plot.planted_at) / 1000;
         if (plot.planted_at > 0 && elapsed >= plot.duration) {
-          totalYield += 6;
+          const plotYield = 6 + (session.business.upgrades.tractor || 0) * 2;
+          totalYield += plotYield;
           plot.planted_at = 0;
           harvestedCount++;
         }
       });
+      if (harvestedCount === 0) {
+        return res.json({ ok: true, message: "Пшениця ще дозріває на ділянках!" });
+      }
       session.wheat.granary_used = Math.min(session.wheat.granary_max, session.wheat.granary_used + totalYield);
+      session.wheat.total_harvested += totalYield;
+      addXp(session, harvestedCount * 15);
       return res.json({
         ok: true,
-        result: `✨ Зібрано ${harvestedCount} ділянок! Отримано 🌾 ${totalYield} пшениці.`,
+        message: `✨ Зібрано ${harvestedCount} ділянок! Отримано 🌾 ${totalYield} снопів пшениці у сховище.`,
       });
     }
 
-    case "wheat_sell_local": {
-      const amountToSell = Number(req.body.count) || session.wheat.granary_used;
-      const actualSell = Math.min(session.wheat.granary_used, amountToSell);
-      const earned = actualSell * session.economy.prices.wheat;
-      session.wheat.granary_used -= actualSell;
-      session.economy.balance += earned;
+    case "fulfill_contract": {
+      const contract = session.business.contracts.find((c) => c.id === contract_id);
+      if (!contract) {
+        return res.status(404).json({ ok: false, message: "Контракт не знайдено!" });
+      }
+      if (contract.fulfilled) {
+        return res.status(400).json({ ok: false, message: "Цей контракт вже виконано!" });
+      }
+
+      // Check item
+      if (contract.req_item === "wheat" && session.wheat.granary_used >= contract.req_count) {
+        session.wheat.granary_used -= contract.req_count;
+      } else if (contract.req_item === "egg" && session.farm.chickens.eggs >= contract.req_count) {
+        session.farm.chickens.eggs -= contract.req_count;
+      } else if (contract.req_item === "cheese" && session.farm.cows.cheese >= contract.req_count) {
+        session.farm.cows.cheese -= contract.req_count;
+      } else if (contract.req_item === "ostrich_egg" && session.farm.ostriches.eggs >= contract.req_count) {
+        session.farm.ostriches.eggs -= contract.req_count;
+      } else {
+        return res.status(400).json({ ok: false, message: `Не вистачає продукції для виконання контракту (${contract.req_count} шт.)!` });
+      }
+
+      contract.fulfilled = true;
+      session.economy.balance += contract.reward_coins;
+      addXp(session, contract.reward_xp);
+
       return res.json({
         ok: true,
-        result: `🌾 Продано ${actualSell} пшениці за 🪙 ${earned}!`,
+        message: `🤝 Контракт "${contract.title}" виконано! Отримано 🪙 ${contract.reward_coins} та +${contract.reward_xp} XP!`,
       });
+    }
+
+    case "hire_worker": {
+      const cost = 500;
+      if (session.economy.balance < cost) {
+        return res.status(400).json({ ok: false, message: "Потрібно 🪙 500 для найму нового помічника!" });
+      }
+      session.economy.balance -= cost;
+      session.workers.hired += 1;
+      session.workers.speed_boost += 10;
+      addXp(session, 100);
+      return res.json({ ok: true, message: `👨‍🌾 Найнято помічника! Швидкість роботи ферми зросла на +10%.` });
     }
 
     default:
-      return res.json({ ok: true, result: "Дію успішно виконано!" });
+      return res.json({ ok: true, message: "Дію успішно виконано!" });
   }
 });
 
-// 4. GET & POST /api/leaderboard
-app.all("/api/leaderboard", async (req: Request, res: Response) => {
-  const forwarded = await forwardToPythonBackend("/api/leaderboard", "GET", req, res);
-  if (forwarded) return;
-
+// 4. GET /api/leaderboard
+app.get("/api/leaderboard", (req: Request, res: Response) => {
   const session = getOrCreateSession(req);
+
   const mockLeaderboard = [
     { user_id: 101, name: "Олександр 'Трактор' 🇺🇦", balance: 148500, rank: 1, tag: "Агро-Олігарх" },
     { user_id: 102, name: "Марія Степанівна", balance: 94200, rank: 2, tag: "Королева Сиру 🧀" },
     { user_id: 103, name: "Богдан Подільський", balance: 78100, rank: 3, tag: "Майстер Пшениці 🌾" },
     { user_id: 104, name: "Андрій Квітучий", balance: 52400, rank: 4, tag: "Агроном Полісся" },
-    { user_id: session.userId, name: `${session.name} (Ви)`, balance: session.economy.balance, rank: 5, tag: session.tag, isSelf: true },
+    { user_id: 105, name: "Катерина Садова", balance: 41800, rank: 5, tag: "Птаховод Року 🪶" },
+    { user_id: 106, name: "Ярослав Мудрий Фермер", balance: 32900, rank: 6, tag: "Тваринник" },
+    { user_id: 107, name: "Іван Карпатський", balance: 24700, rank: 7, tag: "Досвідчений" },
+    { user_id: 108, name: "Олена Сонячна", balance: 18500, rank: 8, tag: "Господиня" },
+    { user_id: session.userId, name: `${session.name} (Ви)`, balance: session.economy.balance, rank: 9, tag: session.tag, isSelf: true },
+    { user_id: 109, name: "Віталій Полігон", balance: 9600, rank: 10, tag: "Новачок" },
   ];
 
-  return res.json({ ok: true, leaderboard: mockLeaderboard });
+  // Re-sort in case user balance changes
+  mockLeaderboard.sort((a, b) => b.balance - a.balance);
+  mockLeaderboard.forEach((item, index) => {
+    item.rank = index + 1;
+  });
+
+  return res.json({ leaderboard: mockLeaderboard });
 });
 
 async function startServer() {
@@ -774,9 +817,8 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`🌾 Ферма А-11 Сервер успішно запущено на http://0.0.0.0:${PORT} з проксі на ${PYTHON_BACKEND_URL}`);
+    console.log(`🌾 Ферма А-11 Сервер успішно запущено на http://0.0.0.0:${PORT}`);
   });
 }
 
 startServer();
-
