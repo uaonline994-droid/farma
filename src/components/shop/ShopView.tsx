@@ -111,7 +111,7 @@ const SHOP_ITEMS: ShopItem[] = [
     description: "Збагачений корм для страусів",
   },
 
-  // 👑 Титули
+  // 👑 Титули та Престиж
   {
     id: "kucher",
     category: "titles",
@@ -156,6 +156,60 @@ const SHOP_ITEMS: ShopItem[] = [
     price: 15000,
     unit: "титул",
     description: "Королівський статус у турнірній таблиці",
+  },
+  {
+    id: "oligarch",
+    category: "titles",
+    name: "Титул: Агро-Олігарх 💎",
+    icon: "💎",
+    price: 1000000,
+    unit: "титул",
+    description: "Найвищий статус у загальному рейтингу",
+  },
+  {
+    id: "billionaire",
+    category: "titles",
+    name: "Титул: Мільярдер Полів 🏛️",
+    icon: "🏛️",
+    price: 25000000,
+    unit: "титул",
+    description: "Статус фінансового гегемона",
+  },
+  {
+    id: "ruler",
+    category: "titles",
+    name: "Титул: Володар Землі 🌟",
+    icon: "🌟",
+    price: 100000000,
+    unit: "титул",
+    description: "Абсолютна верхівка агрономічного світу",
+  },
+  {
+    id: "gold_tractor",
+    category: "titles",
+    name: "Золотий Комбайн 'Gold Edition' 🚜",
+    icon: "✨",
+    price: 5000000,
+    unit: "екземпляр",
+    description: "Ексклюзивний позолочений комбайн преміум-класу",
+  },
+  {
+    id: "drone_fleet",
+    category: "titles",
+    name: "Агро-Дронний Флот 🛰️",
+    icon: "🛰️",
+    price: 15000000,
+    unit: "флот",
+    description: "Автоматизований супутниковий контроль полів",
+  },
+  {
+    id: "heli_hub",
+    category: "titles",
+    name: "Вертолітний Логістичний Хаб 🚁",
+    icon: "🚁",
+    price: 200000000,
+    unit: "комплекс",
+    description: "Миттєва авіадоставка продукції по всьому світу",
   },
 ];
 
