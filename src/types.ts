@@ -87,6 +87,16 @@ export interface StorageState {
   max: number;
 }
 
+export interface BankDepositItem {
+  id?: string;
+  user_id?: number;
+  user_name?: string;
+  amount: number;
+  rate?: number;
+  created_at?: string | number;
+  profit?: number;
+}
+
 export interface BankState {
   deposit: number;
   deposit_rate: number;
@@ -95,6 +105,7 @@ export interface BankState {
   safe_balance: number;
   last_interest_time?: number;
   bonds?: number;
+  active_deposits?: BankDepositItem[];
 }
 
 export interface EconomyState {
