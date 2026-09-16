@@ -137,10 +137,22 @@ export interface BusinessUpgrades {
   tractor: number;
 }
 
+export interface BusinessList {
+  kiosk: number;
+  cafe: number;
+  shop: number;
+  restaurant: number;
+  factory: number;
+  corporation: number;
+  monopoly: number;
+}
+
 export interface BusinessState {
   level_name: string;
   contracts: BusinessContract[];
   upgrades: BusinessUpgrades;
+  businesses?: BusinessList;
+  prestige_level?: number;
 }
 
 export interface LevelState {
@@ -177,10 +189,7 @@ export interface AuthResponse {
   ok: boolean;
   chat_id: number;
   user_id: number;
-  name?: string;
   user_name?: string;
-  username?: string | null;
-  is_new_player?: boolean;
 }
 
 export interface ActionResponse {

@@ -19,7 +19,7 @@ export const WheatFieldView: React.FC<{
   const wheatSeeds = gameState.economy.seed_stock.wheat;
   const granaryUsed = wheat.granary_used;
   const granaryMax = wheat.granary_max;
-  const granaryPercent = Math.min(100, Math.round((granaryUsed / granaryMax) * 100));
+  const granaryPercent = Math.min(100, Math.round((granaryUsed / (granaryMax || 1)) * 100));
 
   const readyPlotsCount = plots.filter((p) => (p.stage ?? 0) >= 4).length;
   const emptyPlotsCount = plots.filter((p) => p.planted_at === 0).length;
@@ -36,16 +36,21 @@ export const WheatFieldView: React.FC<{
         });
       } catch {}
     }
-    await onAction("harvest_wheat_all");
+    await onAction("wheat_collect");
   };
 
   const handlePlantAll = async () => {
     triggerHaptic("medium");
-    await onAction("plant_wheat_all");
+    await onAction("wheat_plant");
+  };
+
+  const handleSellLocal = async () => {
+    triggerHaptic("medium");
+    await onAction("wheat_sell_local");
   };
 
   return (
-    <div className="flex flex-col gap-4 pb-24 max-w-xl mx-auto px-3">
+    <div className="flex flex-col gap-4 pb-24 max-w-xl mx-auto px-3 font-['Nunito']">
       {/* Top Banner: Granary & Stats */}
       <div className="bg-gradient-to-r from-[#6b471c] to-[#452c11] rounded-3xl p-4 border-2 border-amber-500/70 shadow-xl text-amber-50">
         <div className="flex items-center justify-between mb-2">
@@ -66,7 +71,7 @@ export const WheatFieldView: React.FC<{
           <div className="text-right">
             <span className="text-[10px] text-amber-300 uppercase tracking-wider font-bold">Всього зібрано</span>
             <div className="font-['Fredoka'] font-bold text-sm text-yellow-200">
-              🌾 {wheat.total_harvested} снопів
+              🌾 {wheat.total_harvested} т
             </div>
           </div>
         </div>
@@ -79,7 +84,7 @@ export const WheatFieldView: React.FC<{
               Зерносховище (Елеватор):
             </span>
             <span className="font-['Fredoka'] font-bold text-yellow-300">
-              {granaryUsed} / {granaryMax} од. ({granaryPercent}%)
+              {granaryUsed} / {granaryMax} т ({granaryPercent}%)
             </span>
           </div>
 
@@ -128,10 +133,10 @@ export const WheatFieldView: React.FC<{
                     onClick={() => {
                       if (stage >= 4) {
                         triggerHaptic("success");
-                        onAction("harvest_wheat_all");
+                        handleHarvestAll();
                       } else if (stage === 0 && wheatSeeds > 0) {
                         triggerHaptic("medium");
-                        onAction("plant_wheat_all");
+                        handlePlantAll();
                       }
                     }}
                   />
@@ -150,7 +155,7 @@ export const WheatFieldView: React.FC<{
           </div>
         </div>
 
-        {/* Action Buttons: Plant All & Harvest All */}
+        {/* Action Buttons: Plant All & Harvest All & Sell */}
         <div className="grid grid-cols-2 gap-3 mt-4">
           <button
             id="btn-plant-wheat-all"
@@ -158,12 +163,12 @@ export const WheatFieldView: React.FC<{
             disabled={isLoading || emptyPlotsCount === 0 || wheatSeeds === 0}
             className={`py-3 px-3 rounded-2xl font-['Fredoka'] font-bold text-xs shadow-lg border flex items-center justify-center gap-1.5 transition-all ${
               emptyPlotsCount > 0 && wheatSeeds > 0
-                ? "bg-gradient-to-r from-amber-700 to-amber-800 hover:from-amber-600 active:scale-95 text-amber-100 border-amber-500/70 shadow-amber-950/50"
-                : "bg-gray-800/40 text-gray-500 border-gray-700 cursor-not-allowed"
+                ? "bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 active:scale-95 text-white border-emerald-300"
+                : "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
             }`}
           >
-            <Sprout className="w-4 h-4 text-emerald-300" />
-            Посадити все ({Math.min(emptyPlotsCount, wheatSeeds)} шт.)
+            <Sprout className="w-4 h-4" />
+            🌱 Посадити все
           </button>
 
           <button
@@ -172,14 +177,26 @@ export const WheatFieldView: React.FC<{
             disabled={isLoading || readyPlotsCount === 0}
             className={`py-3 px-3 rounded-2xl font-['Fredoka'] font-bold text-xs shadow-lg border flex items-center justify-center gap-1.5 transition-all ${
               readyPlotsCount > 0
-                ? "bg-gradient-to-r from-yellow-400 via-amber-400 to-amber-500 hover:from-yellow-300 active:scale-95 text-amber-950 border-yellow-200 shadow-amber-900/40 animate-pulse"
-                : "bg-gray-800/40 text-gray-500 border-gray-700 cursor-not-allowed"
+                ? "bg-gradient-to-r from-amber-400 to-yellow-500 hover:from-amber-300 active:scale-95 text-amber-950 border-yellow-200 shadow-amber-950/60 animate-pulse"
+                : "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
             }`}
           >
-            <Sparkles className="w-4 h-4 text-amber-900" />
-            Зібрати все ({readyPlotsCount})
+            <Sparkles className="w-4 h-4" />
+            🧺 Зібрати врожай
           </button>
         </div>
+
+        {/* Local Fast Sell Elevator Button */}
+        {granaryUsed > 0 && (
+          <button
+            id="btn-sell-wheat-local"
+            onClick={handleSellLocal}
+            disabled={isLoading}
+            className="w-full mt-3 py-2.5 bg-[#2d5232] hover:bg-[#38643e] text-yellow-200 font-['Fredoka'] font-bold text-xs rounded-xl border border-emerald-500/60 flex items-center justify-center gap-1.5 transition-all active:scale-95"
+          >
+            💰 Продати всю пшеницю з елеватора ({granaryUsed} т за {granaryUsed * (gameState.economy.prices.wheat || 45)} 🪙)
+          </button>
+        )}
       </div>
     </div>
   );

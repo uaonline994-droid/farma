@@ -67,13 +67,23 @@ export async function keepBackendAwake(): Promise<boolean> {
 
 function getHeaders(): HeadersInit {
   const initData = getTelegramInitData();
-
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
   };
 
   if (initData) {
     headers["X-Telegram-Init-Data"] = initData;
+    headers["X-Init-Data"] = initData;
+  }
+
+  const savedId = getSavedTelegramId();
+  if (savedId) {
+    headers["X-Telegram-User-Id"] = savedId;
+  }
+
+  const savedName = getSavedTelegramName();
+  if (savedName) {
+    headers["X-Telegram-User-Name"] = encodeURIComponent(savedName);
   }
 
   return headers;
@@ -97,10 +107,6 @@ export interface TelegramAuthResult {
   is_new_player: boolean;
 }
 
-// Явно авторизує користувача Telegram Mini App на бекенді за підписаним initData.
-// Викликається одразу при відкритті веб-апки, до будь-яких інших запитів — це
-// гарантує, що бекенд зареєстрував гравця (і видав стартовий набір, якщо він новий)
-// ще до першого рендера ферми.
 export async function authenticateTelegramUser(): Promise<TelegramAuthResult> {
   const initData = getTelegramInitData();
   if (!initData) {
@@ -124,8 +130,6 @@ export async function authenticateTelegramUser(): Promise<TelegramAuthResult> {
 
   const data = await res.json();
   if (data?.user_id) {
-    // Кешуємо підтверджені бекендом дані — корисно як фолбек для заголовків
-    // подальших запитів (наприклад, якщо initData стане недоступним).
     saveTelegramCredentials(data.user_id, data.name);
   }
   return data;
@@ -141,6 +145,8 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
   const rawLevel = state?.level;
   const rawLevelName = state?.level_name || "🚜 Фермер";
   const rawContract = state?.contract;
+  const rawWorkers = state?.workers || [];
+  const rawBiz = state?.business || {};
 
   const now = Date.now();
 
@@ -232,6 +238,8 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     wheat: Number(rawPrices.wheat_local ?? rawPrices.wheat) || 45,
   };
 
+  const hiredWorkerList = Array.isArray(rawWorkers) ? rawWorkers : [];
+
   return {
     tag: state.tag || "Агроном 🌾",
     level: {
@@ -314,7 +322,7 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       total_harvested: Number(rawWheat.wheat) || 0,
     },
     workers: {
-      hired: Array.isArray(state.workers) ? state.workers.length : 0,
+      hired: hiredWorkerList.length,
       speed_boost: 0,
       auto_collector: false,
       slots: 4,
@@ -324,10 +332,20 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       level_name: rawLevelName,
       contracts,
       upgrades: {
-        sprinkler: Number(state.business?.kiosk) || 0,
-        auto_feeder: Number(state.business?.cafe) || 0,
-        tractor: Number(state.business?.shop) || 0,
+        sprinkler: Number(rawBiz.kiosk) || 0,
+        auto_feeder: Number(rawBiz.cafe) || 0,
+        tractor: Number(rawBiz.shop) || 0,
       },
+      businesses: {
+        kiosk: Number(rawBiz.kiosk) || 0,
+        cafe: Number(rawBiz.cafe) || 0,
+        shop: Number(rawBiz.shop) || 0,
+        restaurant: Number(rawBiz.restaurant) || 0,
+        factory: Number(rawBiz.factory) || 0,
+        corporation: Number(rawBiz.corporation) || 0,
+        monopoly: Number(rawBiz.monopoly) || 0,
+      },
+      prestige_level: Number(state.prestige_level) || 0,
     },
   };
 }
@@ -344,14 +362,12 @@ async function requestState(): Promise<any> {
   const baseUrl = getBaseUrl();
   const headers = getHeaders();
 
-  // Try POST /api/state first (if server supports POST)
   let res = await fetch(`${baseUrl}/api/state`, {
     method: "POST",
     headers,
     body: JSON.stringify({}),
   }).catch(() => null);
 
-  // If 405 Method Not Allowed or network failure, fallback to GET /api/state
   if (!res || res.status === 405) {
     res = await fetch(`${baseUrl}/api/state`, {
       method: "GET",
@@ -397,12 +413,14 @@ export async function executeAction(
   let pythonAction = actionName;
   const pythonPayload: Record<string, unknown> = { ...params };
 
+  // Mapping client actions directly to Python API actions
   if (
     actionName === "collect" ||
     actionName === "harvest_potato" ||
     actionName === "collect_eggs" ||
     actionName === "collect_milk" ||
-    actionName === "collect_ostrich"
+    actionName === "collect_ostrich" ||
+    actionName === "collect_all"
   ) {
     pythonAction = "collect_farm";
   } else if (actionName === "plant_potato") {
@@ -417,24 +435,53 @@ export async function executeAction(
     pythonAction = "breed";
   } else if (actionName === "raise" || actionName === "raise_chicks") {
     pythonAction = "raise_chicks";
-  } else if (actionName === "plant_wheat" || actionName === "plant_all_wheat" || actionName === "wheat_plant") {
+  } else if (
+    actionName === "plant_wheat" ||
+    actionName === "plant_all_wheat" ||
+    actionName === "plant_wheat_all" ||
+    actionName === "wheat_plant"
+  ) {
     pythonAction = "wheat_plant";
-  } else if (actionName === "harvest_wheat" || actionName === "harvest_all_wheat" || actionName === "wheat_collect") {
+  } else if (
+    actionName === "harvest_wheat" ||
+    actionName === "harvest_all_wheat" ||
+    actionName === "harvest_wheat_all" ||
+    actionName === "wheat_collect"
+  ) {
     pythonAction = "wheat_collect";
   } else if (actionName === "sell_wheat" || actionName === "wheat_sell_local") {
     pythonAction = "wheat_sell_local";
+  } else if (actionName === "hire_worker") {
+    pythonAction = "hire_worker";
+    // Allowed python keys: "shepherd", "milkmaid", "tractor", "combine"
+    const allowedKeys = ["shepherd", "milkmaid", "tractor", "combine"];
+    let rawWorker = String(params.worker || params.worker_key || "tractor").toLowerCase();
+    if (!allowedKeys.includes(rawWorker)) {
+      rawWorker = "tractor";
+    }
+    pythonPayload.worker = rawWorker;
   } else if (actionName === "shop_buy" || actionName === "buy_shop_item") {
     pythonAction = "shop_buy";
     let rawItem = String(params.item || params.item_id || "");
     const mapShop: Record<string, string> = {
       seed_potato: "seed",
       potato_seed: "seed",
+      seed: "seed",
       grain_feed: "grain",
+      grain: "grain",
       hay_feed: "hay",
+      hay: "hay",
       premium_feed: "mix",
+      mix: "mix",
       chick: "chicken",
+      chicken: "chicken",
+      rooster: "rooster",
       ostrich_chick: "ostrich",
+      ostrich: "ostrich",
       piglet: "pig",
+      pig: "pig",
+      cow: "cow",
+      wheat_seed: "wheat_seed",
     };
     pythonPayload.item = mapShop[rawItem] || rawItem;
     pythonPayload.count = Number(params.count || params.amount) || 1;
@@ -451,7 +498,9 @@ export async function executeAction(
       cheese: "cheese",
       ostrich_feather: "feather",
       feather: "feather",
+      feathers: "feather",
       ostrich_egg: "ostrich_egg",
+      ostrich_eggs: "ostrich_egg",
     };
     pythonPayload.item = mapProduct[rawItem] || rawItem;
     pythonPayload.count = Number(params.count || params.amount) || 1;
@@ -459,9 +508,6 @@ export async function executeAction(
     pythonAction = "sell_animal";
     pythonPayload.item = String(params.item || "");
     pythonPayload.count = Number(params.count) || 1;
-  } else if (actionName === "hire_worker") {
-    pythonAction = "hire_worker";
-    pythonPayload.worker = String(params.worker || "");
   } else if (actionName === "fulfill_contract") {
     pythonAction = "fulfill_contract";
   } else if (actionName === "new_contract") {
@@ -486,7 +532,7 @@ export async function executeAction(
   const data = await res.json();
   return {
     ok: data.ok !== false,
-    message: data.result || data.message || "Дію успішно виконано!",
+    message: data.message || data.result || "Дію успішно виконано!",
     state: data.state ? transformPythonResponseToGameState(data.state) : undefined,
   };
 }
@@ -495,7 +541,6 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
   const baseUrl = getBaseUrl();
   const headers = getHeaders();
 
-  // Try POST /api/leaderboard then fallback to GET if 405
   let res = await fetch(`${baseUrl}/api/leaderboard`, {
     method: "POST",
     headers,

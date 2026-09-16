@@ -23,109 +23,177 @@ import {
   Zap,
   Play,
   Square,
-  ChevronDown,
-  ChevronUp,
+  Bomb,
+  Stars,
+  Sparkle,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
 
-// 🍒 Berry & Harvest Slot Symbols Definition
-export interface SlotSymbol {
+// 🍬 Candy Utopia (Sweet Bonanza Style) Cascading 6x5 Grid Slot Symbols
+export interface CandySymbol {
   id: string;
   name: string;
   icon: string;
-  payout3: number; // Multiplier for 3-match
-  payout2?: number; // Multiplier for 2-match
+  type: "low" | "high" | "scatter" | "multiplier";
+  payout8_9: number; // 8-9 matching symbols anywhere on grid
+  payout10_11: number; // 10-11 matching symbols
+  payout12_plus: number; // 12+ matching symbols
   color: string;
   glow: string;
-  isJackpot?: boolean;
-  isWild?: boolean;
+  multiplierVal?: number;
 }
 
-export const SYMBOLS: SlotSymbol[] = [
+export const CANDY_SYMBOLS: CandySymbol[] = [
+  // Низькі символи (Фрукти в сиропі)
   {
-    id: "cherry",
-    name: "Вишня",
-    icon: "🍒",
-    payout3: 5,
-    payout2: 2,
-    color: "#ef4444",
-    glow: "rgba(239, 68, 68, 0.6)",
-  },
-  {
-    id: "strawberry",
-    name: "Полуниця",
-    icon: "🍓",
-    payout3: 8,
-    color: "#f43f5e",
-    glow: "rgba(244, 63, 94, 0.6)",
+    id: "banana",
+    name: "Банан у карамелі",
+    icon: "🍌",
+    type: "low",
+    payout8_9: 0.5,
+    payout10_11: 1.0,
+    payout12_plus: 2.0,
+    color: "#facc15",
+    glow: "rgba(250, 204, 21, 0.6)",
   },
   {
     id: "grapes",
-    name: "Виноград",
+    name: "Желейний виноград",
     icon: "🍇",
-    payout3: 12,
-    color: "#a855f7",
-    glow: "rgba(168, 85, 247, 0.6)",
-  },
-  {
-    id: "blueberry",
-    name: "Чорниця",
-    icon: "🫐",
-    payout3: 18,
-    color: "#3b82f6",
-    glow: "rgba(59, 130, 246, 0.6)",
+    type: "low",
+    payout8_9: 0.8,
+    payout10_11: 1.5,
+    payout12_plus: 4.0,
+    color: "#c084fc",
+    glow: "rgba(192, 132, 252, 0.6)",
   },
   {
     id: "watermelon",
-    name: "Кавун",
+    name: "Цукровий кавун",
     icon: "🍉",
-    payout3: 25,
-    color: "#10b981",
-    glow: "rgba(16, 185, 129, 0.6)",
+    type: "low",
+    payout8_9: 1.0,
+    payout10_11: 2.0,
+    payout12_plus: 5.0,
+    color: "#4ade80",
+    glow: "rgba(74, 222, 128, 0.6)",
   },
   {
-    id: "corn",
-    name: "Кукурудза",
-    icon: "🌽",
-    payout3: 50,
-    color: "#eab308",
-    glow: "rgba(234, 179, 8, 0.7)",
+    id: "plum",
+    name: "Глянцева слива",
+    icon: "🫐",
+    type: "low",
+    payout8_9: 1.5,
+    payout10_11: 3.0,
+    payout12_plus: 8.0,
+    color: "#60a5fa",
+    glow: "rgba(96, 165, 250, 0.6)",
   },
   {
-    id: "diamond",
-    name: "777 Діамант",
-    icon: "💎",
-    payout3: 100,
-    color: "#06b6d4",
-    glow: "rgba(6, 182, 212, 0.9)",
-    isJackpot: true,
+    id: "apple",
+    name: "Карамельне яблуко",
+    icon: "🍏",
+    type: "low",
+    payout8_9: 2.0,
+    payout10_11: 5.0,
+    payout12_plus: 10.0,
+    color: "#a3e635",
+    glow: "rgba(163, 230, 53, 0.6)",
+  },
+
+  // Високі символи (Коштовні льодяники-самоцвіти)
+  {
+    id: "blue_square",
+    name: "Синій квадрат",
+    icon: "🔷",
+    type: "high",
+    payout8_9: 3.0,
+    payout10_11: 8.0,
+    payout12_plus: 15.0,
+    color: "#38bdf8",
+    glow: "rgba(56, 189, 248, 0.8)",
   },
   {
-    id: "wild",
-    name: "Золотий Колос",
-    icon: "🌾",
-    payout3: 75,
+    id: "green_hex",
+    name: "Смарагдовий шестигранник",
+    icon: "🟢",
+    type: "high",
+    payout8_9: 4.0,
+    payout10_11: 10.0,
+    payout12_plus: 20.0,
+    color: "#34d399",
+    glow: "rgba(52, 211, 153, 0.8)",
+  },
+  {
+    id: "purple_diamond",
+    name: "Фіолетовий діамант",
+    icon: "🔮",
+    type: "high",
+    payout8_9: 5.0,
+    payout10_11: 15.0,
+    payout12_plus: 30.0,
+    color: "#e879f9",
+    glow: "rgba(232, 121, 249, 0.8)",
+  },
+  {
+    id: "red_heart",
+    name: "Рубінове серце",
+    icon: "❤️",
+    type: "high",
+    payout8_9: 10.0,
+    payout10_11: 25.0,
+    payout12_plus: 50.0,
+    color: "#f43f5e",
+    glow: "rgba(244, 63, 94, 0.9)",
+  },
+
+  // Спеціальні символи
+  {
+    id: "scatter_lollipop",
+    name: "Скаттер Льодяник",
+    icon: "🍭",
+    type: "scatter",
+    payout8_9: 3.0,
+    payout10_11: 5.0,
+    payout12_plus: 100.0,
+    color: "#fb7185",
+    glow: "rgba(251, 113, 133, 1)",
+  },
+  {
+    id: "multiplier_bomb",
+    name: "Цукрова Бомба",
+    icon: "💣",
+    type: "multiplier",
+    payout8_9: 0,
+    payout10_11: 0,
+    payout12_plus: 0,
     color: "#f59e0b",
-    glow: "rgba(245, 158, 11, 0.9)",
-    isWild: true,
+    glow: "rgba(245, 158, 11, 1)",
+    multiplierVal: 10,
   },
 ];
 
-// Weighted reel distribution (more cherries/strawberries, rarer diamonds/wilds)
-const WEIGHTED_STRIP: string[] = [
-  "cherry", "cherry", "cherry", "cherry",
-  "strawberry", "strawberry", "strawberry",
+const WEIGHTED_CANDIES = [
+  "banana", "banana", "banana", "banana",
   "grapes", "grapes", "grapes",
-  "blueberry", "blueberry",
-  "watermelon", "watermelon",
-  "corn",
-  "wild",
-  "diamond",
-  "cherry", "strawberry", "grapes", "blueberry",
+  "watermelon", "watermelon", "watermelon",
+  "plum", "plum",
+  "apple", "apple",
+  "blue_square", "blue_square",
+  "green_hex", "green_hex",
+  "purple_diamond",
+  "red_heart",
+  "scatter_lollipop",
+  "multiplier_bomb",
 ];
 
 const QUICK_BETS = [50, 100, 250, 500, 1000, 2500, 5000];
+
+// Grid dimensions: 6 columns x 5 rows = 30 cells
+const COLS = 6;
+const ROWS = 5;
+const TOTAL_CELLS = COLS * ROWS;
 
 export const CasinoView: React.FC<{
   onAction?: (actionName: string, params?: Record<string, unknown>) => Promise<void>;
@@ -137,51 +205,46 @@ export const CasinoView: React.FC<{
 
   const [bet, setBet] = useState<number>(100);
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
-  const [reels, setReels] = useState<[SlotSymbol, SlotSymbol, SlotSymbol]>([
-    SYMBOLS[0], // Cherry
-    SYMBOLS[1], // Strawberry
-    SYMBOLS[2], // Grapes
-  ]);
+  const [grid, setGrid] = useState<CandySymbol[]>(() =>
+    Array.from({ length: TOTAL_CELLS }, () => {
+      const randomId = WEIGHTED_CANDIES[Math.floor(Math.random() * WEIGHTED_CANDIES.length)];
+      return CANDY_SYMBOLS.find((s) => s.id === randomId) || CANDY_SYMBOLS[0];
+    })
+  );
 
-  const [reelSpinning, setReelSpinning] = useState<[boolean, boolean, boolean]>([false, false, false]);
-  const [lastWin, setLastWin] = useState<number | null>(null);
-  const [lastMultiplier, setLastMultiplier] = useState<number | null>(null);
-  const [winMessage, setWinMessage] = useState<string | null>(null);
-  const [winningIndices, setWinningIndices] = useState<number[]>([]);
-  const [leverPulled, setLeverPulled] = useState<boolean>(false);
+  const [winningCellIndices, setWinningCellIndices] = useState<number[]>([]);
+  const [activeBombs, setActiveBombs] = useState<number[]>([]);
+  const [totalMultiplier, setTotalMultiplier] = useState<number>(1);
+  const [roundWin, setRoundWin] = useState<number>(0);
+  const [tumbleStep, setTumbleStep] = useState<number>(0);
+  const [isFreeSpinsMode, setIsFreeSpinsMode] = useState<boolean>(false);
+  const [freeSpinsLeft, setFreeSpinsLeft] = useState<number>(0);
+  const [winTitle, setWinTitle] = useState<string | null>(null);
   const [showPaytable, setShowPaytable] = useState<boolean>(false);
-  const [autoSpinCount, setAutoSpinCount] = useState<number>(0);
-  const [isAutoSpinning, setIsAutoSpinning] = useState<boolean>(false);
 
-  // Progressive Agro Jackpot counter
-  const [jackpotPool, setJackpotPool] = useState<number>(88500);
+  // Progressive Agro Jackpot pool
+  const [jackpotPool, setJackpotPool] = useState<number>(92500);
 
-  // Spin History
-  const [spinHistory, setSpinHistory] = useState<
-    Array<{ id: number; icons: string[]; win: number; bet: number; time: string }>
-  >([]);
-
-  // Sounds active ref
   const soundRef = useRef(soundEnabled);
   soundRef.current = soundEnabled;
 
-  const isAutoSpinningRef = useRef(isAutoSpinning);
-  isAutoSpinningRef.current = isAutoSpinning;
-
-  const autoSpinCountRef = useRef(autoSpinCount);
-  autoSpinCountRef.current = autoSpinCount;
-
-  // Slowly increment progressive jackpot for thrill
+  // Slowly increment progressive pool
   useEffect(() => {
     const timer = setInterval(() => {
-      setJackpotPool((prev) => prev + Math.floor(Math.random() * 5) + 1);
-    }, 3000);
+      setJackpotPool((prev) => prev + Math.floor(Math.random() * 6) + 1);
+    }, 2800);
     return () => clearInterval(timer);
   }, []);
 
-  const getRandomSymbol = (): SlotSymbol => {
-    const randomId = WEIGHTED_STRIP[Math.floor(Math.random() * WEIGHTED_STRIP.length)];
-    return SYMBOLS.find((s) => s.id === randomId) || SYMBOLS[0];
+  const getRandomCandy = (): CandySymbol => {
+    const randomId = WEIGHTED_CANDIES[Math.floor(Math.random() * WEIGHTED_CANDIES.length)];
+    const symbol = CANDY_SYMBOLS.find((s) => s.id === randomId) || CANDY_SYMBOLS[0];
+    if (symbol.id === "multiplier_bomb") {
+      const multOptions = [2, 3, 5, 10, 25, 50, 100];
+      const val = multOptions[Math.floor(Math.random() * multOptions.length)];
+      return { ...symbol, multiplierVal: val };
+    }
+    return symbol;
   };
 
   const handleBetChange = (newBet: number) => {
@@ -192,112 +255,83 @@ export const CasinoView: React.FC<{
     setBet(safeBet);
   };
 
-  const calculateOutcome = (r1: SlotSymbol, r2: SlotSymbol, r3: SlotSymbol, currentBet: number) => {
-    // Check Wild substitutions
-    const isWild1 = r1.isWild;
-    const isWild2 = r2.isWild;
-    const isWild3 = r3.isWild;
+  // Evaluate cascading win on any 6x5 grid (Scatter-Pays mechanism: 8+ matching anywhere)
+  const evaluateGrid = (currentGrid: CandySymbol[], currentBet: number) => {
+    const counts: Record<string, number> = {};
+    currentGrid.forEach((item) => {
+      counts[item.id] = (counts[item.id] || 0) + 1;
+    });
 
-    // 1. Triple Wild (Jackpot Special)
-    if (isWild1 && isWild2 && isWild3) {
-      return {
-        multiplier: 75,
-        winAmount: currentBet * 75,
-        msg: "🌾 ПОТРІЙНИЙ КОЛОС! СУПЕР-ВРОЖАЙ! 🌾",
-        winningReels: [0, 1, 2],
-        isJackpot: true,
-      };
-    }
+    let baseWin = 0;
+    const winningIds: string[] = [];
+    let scatterCount = counts["scatter_lollipop"] || 0;
+    let multiplierBombsSum = 0;
 
-    // 2. Triple Diamond (777 MEGA JACKPOT)
-    if (r1.id === "diamond" && r2.id === "diamond" && r3.id === "diamond") {
-      return {
-        multiplier: 100,
-        winAmount: currentBet * 100 + jackpotPool,
-        msg: "💎 777 ДЖЕКПОТ! МЕГА-ВИГРАШ! 💎",
-        winningReels: [0, 1, 2],
-        isJackpot: true,
-      };
-    }
-
-    // 3. Exact 3-of-a-kind (any matching symbol)
-    if (r1.id === r2.id && r2.id === r3.id) {
-      return {
-        multiplier: r1.payout3,
-        winAmount: currentBet * r1.payout3,
-        msg: `✨ 3× ${r1.name}! +${(currentBet * r1.payout3).toLocaleString()} 🪙`,
-        winningReels: [0, 1, 2],
-        isJackpot: r1.isJackpot || r1.payout3 >= 50,
-      };
-    }
-
-    // 4. Wild matching (2 identical + 1 wild or 1 symbol + 2 wilds)
-    const nonWilds = [r1, r2, r3].filter((s) => !s.isWild);
-    if (nonWilds.length > 0) {
-      const target = nonWilds[0];
-      const allMatchWithWild = [r1, r2, r3].every((s) => s.id === target.id || s.isWild);
-      if (allMatchWithWild) {
-        return {
-          multiplier: target.payout3,
-          winAmount: currentBet * target.payout3,
-          msg: `🌾 КОЛОСОК ДОПОМІГ: 3× ${target.name}! +${(currentBet * target.payout3).toLocaleString()} 🪙`,
-          winningReels: [0, 1, 2],
-          isJackpot: target.isJackpot || target.payout3 >= 50,
-        };
+    // Multiplier bombs on field
+    currentGrid.forEach((item) => {
+      if (item.id === "multiplier_bomb" && item.multiplierVal) {
+        multiplierBombsSum += item.multiplierVal;
       }
-    }
+    });
 
-    // 5. 2-of-a-kind Cherries (First 2 or any 2)
-    const cherryCount = [r1, r2, r3].filter((s) => s.id === "cherry" || s.isWild).length;
-    if (cherryCount === 2) {
-      const winReels = [
-        r1.id === "cherry" || r1.isWild ? 0 : -1,
-        r2.id === "cherry" || r2.isWild ? 1 : -1,
-        r3.id === "cherry" || r3.isWild ? 2 : -1,
-      ].filter((idx) => idx !== -1);
+    Object.entries(counts).forEach(([id, count]) => {
+      const sym = CANDY_SYMBOLS.find((s) => s.id === id);
+      if (!sym) return;
 
-      return {
-        multiplier: 2,
-        winAmount: currentBet * 2,
-        msg: `🍒 2× Вишеньки! +${(currentBet * 2).toLocaleString()} 🪙`,
-        winningReels: winReels,
-        isJackpot: false,
-      };
-    }
+      if (sym.type === "scatter" && count >= 4) {
+        winningIds.push(id);
+        if (count >= 6) baseWin += currentBet * 100;
+        else if (count === 5) baseWin += currentBet * 5;
+        else baseWin += currentBet * 3;
+      } else if (sym.type !== "scatter" && sym.type !== "multiplier" && count >= 8) {
+        winningIds.push(id);
+        if (count >= 12) {
+          baseWin += currentBet * sym.payout12_plus;
+        } else if (count >= 10) {
+          baseWin += currentBet * sym.payout10_11;
+        } else {
+          baseWin += currentBet * sym.payout8_9;
+        }
+      }
+    });
 
-    // Loss
+    const winningIndices: number[] = [];
+    currentGrid.forEach((item, index) => {
+      if (winningIds.includes(item.id)) {
+        winningIndices.push(index);
+      }
+    });
+
     return {
-      multiplier: 0,
-      winAmount: 0,
-      msg: null,
-      winningReels: [],
-      isJackpot: false,
+      baseWin,
+      multiplier: multiplierBombsSum > 0 ? multiplierBombsSum : 1,
+      totalWin: Math.round(baseWin * (multiplierBombsSum > 0 ? multiplierBombsSum : 1)),
+      winningIndices,
+      hasScatters: scatterCount >= 4,
+      scatterCount,
     };
   };
 
+  // Main Spin & Cascade Routine
   const handleSpin = async () => {
     if (isSpinning) return;
-    if (balance < bet) {
+    if (balance < bet && !isFreeSpinsMode) {
       triggerHaptic("warning");
-      addToast("Недостатньо монет для ставки!", "warning");
-      setIsAutoSpinning(false);
+      addToast("Недостатньо монет для ставки в Candy Utopia!", "warning");
       return;
     }
 
     setIsSpinning(true);
-    setWinningIndices([]);
-    setLastWin(null);
-    setLastMultiplier(null);
-    setWinMessage(null);
-    setLeverPulled(true);
+    setWinningCellIndices([]);
+    setRoundWin(0);
+    setWinTitle(null);
+    setTumbleStep(0);
 
     triggerHaptic("heavy");
     if (soundRef.current) playLeverPullSound();
 
-    setTimeout(() => setLeverPulled(false), 400);
-
-    // Deduct bet immediately from local state
-    if (gameState) {
+    // 1. Deduct bet from local state
+    if (!isFreeSpinsMode && gameState) {
       setGameState({
         ...gameState,
         economy: {
@@ -307,566 +341,323 @@ export const CasinoView: React.FC<{
       });
     }
 
-    // Start spinning all 3 reels
-    setReelSpinning([true, true, true]);
+    // 2. Initial Drop of new symbols (6x5)
+    let newGrid = Array.from({ length: TOTAL_CELLS }, () => getRandomCandy());
 
-    // Rhythmic spin clicks sound
+    // Play tick sound while tumbling
     let tickCount = 0;
     const tickInterval = setInterval(() => {
-      if (soundRef.current && tickCount < 16) {
+      if (soundRef.current && tickCount < 10) {
         playSpinTick();
       }
       tickCount++;
-    }, 90);
+    }, 70);
 
-    // Pick final symbols in advance
-    const outcome1 = getRandomSymbol();
-    const outcome2 = getRandomSymbol();
-    const outcome3 = getRandomSymbol();
+    await new Promise((r) => setTimeout(r, 800));
+    clearInterval(tickInterval);
+    setGrid(newGrid);
+    if (soundRef.current) playReelStop(0);
 
-    // Reel 1 Stops (1.2s)
-    setTimeout(() => {
-      setReels((prev) => [outcome1, prev[1], prev[2]]);
-      setReelSpinning([false, true, true]);
-      triggerHaptic("medium");
-      if (soundRef.current) playReelStop(0);
-    }, 1200);
+    // 3. Evaluate and run Cascade (Tumble) loop
+    let currentRoundWin = 0;
+    let evalResult = evaluateGrid(newGrid, bet);
 
-    // Reel 2 Stops (1.7s)
-    setTimeout(() => {
-      setReels((prev) => [outcome1, outcome2, prev[2]]);
-      setReelSpinning([false, false, true]);
-      triggerHaptic("medium");
-      if (soundRef.current) playReelStop(1);
-    }, 1700);
+    if (evalResult.winningIndices.length > 0) {
+      setWinningCellIndices(evalResult.winningIndices);
+      currentRoundWin += evalResult.totalWin;
+      setRoundWin(currentRoundWin);
+      setTotalMultiplier(evalResult.multiplier);
 
-    // Reel 3 Stops (2.2s)
-    setTimeout(() => {
-      clearInterval(tickInterval);
-      setReels([outcome1, outcome2, outcome3]);
-      setReelSpinning([false, false, false]);
-      triggerHaptic("heavy");
-      if (soundRef.current) playReelStop(2);
+      triggerHaptic("success");
+      if (soundRef.current) playWinSmallSound();
 
-      // Evaluate Win
-      const result = calculateOutcome(outcome1, outcome2, outcome3, bet);
+      // Show win explosion effect
+      try {
+        confetti({
+          particleCount: 40,
+          spread: 70,
+          origin: { y: 0.6 },
+          colors: ["#f43f5e", "#38bdf8", "#fbbf24", "#e879f9"],
+        });
+      } catch {}
 
-      if (result.winAmount > 0) {
-        setLastWin(result.winAmount);
-        setLastMultiplier(result.multiplier);
-        setWinMessage(result.msg);
-        setWinningIndices(result.winningReels);
+      // Tumble step 1: replace winning with new falling candies
+      await new Promise((r) => setTimeout(r, 1000));
 
-        // Update balance
-        if (gameState) {
-          setGameState({
-            ...gameState,
-            economy: {
-              ...gameState.economy,
-              balance: gameState.economy.balance - bet + result.winAmount,
-            },
-          });
-        }
+      const tumbledGrid = newGrid.map((cell, idx) =>
+        evalResult.winningIndices.includes(idx) ? getRandomCandy() : cell
+      );
+      setGrid(tumbledGrid);
+      setWinningCellIndices([]);
+      setTumbleStep(1);
 
-        triggerCoinAnimation(result.winAmount);
+      // Check secondary tumble win
+      const secondaryEval = evaluateGrid(tumbledGrid, bet);
+      if (secondaryEval.winningIndices.length > 0) {
+        setWinningCellIndices(secondaryEval.winningIndices);
+        currentRoundWin += secondaryEval.totalWin;
+        setRoundWin(currentRoundWin);
+        if (soundRef.current) playWinBigSound();
 
-        // Sound & FX
-        if (result.isJackpot) {
-          triggerHaptic("success");
-          if (soundRef.current) playJackpotFanfare();
-          try {
-            confetti({
-              particleCount: 100,
-              spread: 80,
-              origin: { y: 0.5 },
-              colors: ["#ffd700", "#ff007f", "#00ffff", "#ffffff", "#10b981"],
-            });
-          } catch {}
-        } else if (result.multiplier >= 10) {
-          triggerHaptic("success");
-          if (soundRef.current) playWinBigSound();
-          try {
-            confetti({
-              particleCount: 50,
-              spread: 60,
-              origin: { y: 0.6 },
-              colors: ["#ffd700", "#ff6b6b", "#48dbfb"],
-            });
-          } catch {}
-        } else {
-          triggerHaptic("medium");
-          if (soundRef.current) playWinSmallSound();
-          try {
-            confetti({
-              particleCount: 25,
-              spread: 45,
-              origin: { y: 0.65 },
-              colors: ["#f59e0b", "#fbbf24"],
-            });
-          } catch {}
-        }
-
-        // Add to history
-        setSpinHistory((prev) => [
-          {
-            id: Date.now(),
-            icons: [outcome1.icon, outcome2.icon, outcome3.icon],
-            win: result.winAmount,
-            bet: bet,
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-          },
-          ...prev.slice(0, 7),
-        ]);
-      } else {
-        if (soundRef.current) playLoseSound();
-        setSpinHistory((prev) => [
-          {
-            id: Date.now(),
-            icons: [outcome1.icon, outcome2.icon, outcome3.icon],
-            win: 0,
-            bet: bet,
-            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-          },
-          ...prev.slice(0, 7),
-        ]);
+        await new Promise((r) => setTimeout(r, 900));
+        const thirdGrid = tumbledGrid.map((cell, idx) =>
+          secondaryEval.winningIndices.includes(idx) ? getRandomCandy() : cell
+        );
+        setGrid(thirdGrid);
+        setWinningCellIndices([]);
       }
-
-      setIsSpinning(false);
-
-      // Handle Auto-Spin loop
-      if (isAutoSpinningRef.current && autoSpinCountRef.current > 1) {
-        setAutoSpinCount((c) => c - 1);
-        setTimeout(() => {
-          handleSpin();
-        }, 800);
-      } else if (isAutoSpinningRef.current && autoSpinCountRef.current <= 1) {
-        setIsAutoSpinning(false);
-        setAutoSpinCount(0);
-      }
-    }, 2200);
-  };
-
-  const startAutoSpins = (count: number) => {
-    if (isSpinning) return;
-    if (balance < bet) {
-      addToast("Недостатньо монет для ставки!", "warning");
-      return;
     }
-    triggerHaptic("medium");
-    setAutoSpinCount(count);
-    setIsAutoSpinning(true);
-    handleSpin();
-  };
 
-  const stopAutoSpins = () => {
-    triggerHaptic("light");
-    setIsAutoSpinning(false);
-    setAutoSpinCount(0);
+    // 4. Bonus Free Spins trigger check (4+ Scatters)
+    if (evalResult.hasScatters) {
+      setIsFreeSpinsMode(true);
+      setFreeSpinsLeft((prev) => prev + 10);
+      setWinTitle("🍭 БОНУСНА ГРА: 10 БЕЗКОШТОВНИХ ОБЕРТАНЬ! 🍭");
+      triggerHaptic("success");
+      if (soundRef.current) playJackpotFanfare();
+
+      try {
+        confetti({
+          particleCount: 100,
+          spread: 90,
+          origin: { y: 0.5 },
+          colors: ["#ff007f", "#00ffff", "#ffd700", "#a855f7"],
+        });
+      } catch {}
+    } else if (currentRoundWin > 0) {
+      if (currentRoundWin >= bet * 10) {
+        setWinTitle(`🎉 ВЕЛИКИЙ СОЛОДКИЙ ВИГРАШ: +${currentRoundWin.toLocaleString()} 🪙`);
+        if (soundRef.current) playWinBigSound();
+      } else {
+        setWinTitle(`✨ Смачний виграш: +${currentRoundWin.toLocaleString()} 🪙`);
+      }
+    } else {
+      if (soundRef.current) playLoseSound();
+    }
+
+    // 5. Finalize balance in store (Preserves balance changes correctly!)
+    if (currentRoundWin > 0 && gameState) {
+      setGameState({
+        ...gameState,
+        economy: {
+          ...gameState.economy,
+          balance: gameState.economy.balance - (!isFreeSpinsMode ? bet : 0) + currentRoundWin,
+        },
+      });
+      triggerCoinAnimation(currentRoundWin);
+    }
+
+    setIsSpinning(false);
   };
 
   return (
-    <div className="flex flex-col gap-3 pb-24 max-w-xl mx-auto px-3">
-      {/* 🎰 Casino Header Banner */}
-      <div className="bg-gradient-to-r from-[#3d1a24] via-[#541f30] to-[#2e121b] rounded-3xl p-3.5 border-2 border-amber-400/80 shadow-2xl text-amber-50 relative overflow-hidden">
-        <div className="flex items-center justify-between relative z-10">
-          <div className="flex items-center gap-2.5">
-            <div className="w-11 h-11 rounded-2xl bg-gradient-to-br from-amber-400 to-red-500 p-0.5 shadow-lg flex items-center justify-center text-2xl">
-              <div className="w-full h-full bg-[#3d1420] rounded-[14px] flex items-center justify-center">
-                🍒
-              </div>
+    <div className="flex flex-col gap-3 pb-24 max-w-xl mx-auto px-2 font-['Nunito']">
+      {/* 🍭 CANDY UTOPIA VIBRANT BANNER */}
+      <div
+        className={`rounded-3xl p-4 border-2 shadow-2xl transition-all duration-700 relative overflow-hidden ${
+          isFreeSpinsMode
+            ? "bg-gradient-to-b from-[#2e1065] via-[#4c1d95] to-[#1e1b4b] border-pink-400 shadow-pink-900/60"
+            : "bg-gradient-to-b from-[#f472b6]/90 via-[#c084fc]/90 to-[#60a5fa]/90 border-yellow-300 shadow-purple-900/40"
+        }`}
+      >
+        {/* Sparkles background fx */}
+        <div className="absolute top-2 right-3 flex items-center gap-2">
+          <span className="text-xs bg-pink-950/80 text-pink-200 px-2.5 py-1 rounded-full border border-pink-400/50 font-['Fredoka'] font-bold flex items-center gap-1 shadow-inner">
+            <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-spin-slow" />
+            6×5 Каскадний слот
+          </span>
+          <button
+            onClick={() => setShowPaytable(!showPaytable)}
+            className="p-1.5 rounded-xl bg-pink-900/60 hover:bg-pink-800 text-yellow-200 border border-yellow-300/40 transition-all text-xs font-bold"
+          >
+            Таблиця ℹ️
+          </button>
+        </div>
+
+        <div className="text-center pt-2">
+          <h1 className="font-['Fredoka'] font-black text-2xl sm:text-3xl text-yellow-200 drop-shadow-[0_2px_10px_rgba(0,0,0,0.7)] tracking-wide">
+            CANDY UTOPIA
+          </h1>
+          <p className="text-xs text-white font-bold drop-shadow">
+            {isFreeSpinsMode ? "✨ НІЧНА БОНУСНА ГРА (МНОЖНИКИ АКТИВНІ) ✨" : "Солодка країна цукерок та каскадних вибухів"}
+          </p>
+        </div>
+
+        {/* Progressive Jackpot Bar */}
+        <div className="mt-3 bg-pink-950/85 backdrop-blur-md rounded-2xl p-2.5 border-2 border-yellow-300 flex items-center justify-between shadow-lg">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-yellow-400 border border-yellow-100 flex items-center justify-center text-lg shadow">
+              🍭
             </div>
             <div>
-              <div className="flex items-center gap-1.5">
-                <h2 className="font-['Fredoka'] font-black text-lg text-yellow-300 leading-tight tracking-wide drop-shadow">
-                  Ягідне Казино "А-11"
-                </h2>
-                <span className="text-[10px] bg-red-600 text-white font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider animate-pulse">
-                  HOT 777
-                </span>
-              </div>
-              <span className="text-[11px] text-pink-200/80">
-                Крути ягідні слоти та зривай Джекпот
+              <span className="text-[10px] text-pink-200 font-bold uppercase tracking-wider block">
+                Цукровий Джекпот
               </span>
+              <div className="font-['Fredoka'] font-extrabold text-base text-yellow-300">
+                {jackpotPool.toLocaleString()} 🪙
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Sound Toggle */}
-            <button
-              onClick={() => {
-                triggerHaptic("light");
-                toggleSound();
-              }}
-              className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-all ${
-                soundEnabled
-                  ? "bg-amber-500/20 border-amber-400 text-yellow-300"
-                  : "bg-gray-800/60 border-gray-600 text-gray-400"
-              }`}
-              title={soundEnabled ? "Вимкнути звук" : "Увімкнути звук"}
-            >
-              {soundEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
-            </button>
-
-            {/* Paytable info button */}
-            <button
-              onClick={() => {
-                triggerHaptic("light");
-                setShowPaytable(!showPaytable);
-              }}
-              className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400 text-yellow-300 flex items-center justify-center hover:bg-amber-500/30 transition-all"
-              title="Таблиця виплат"
-            >
-              <Info className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Progressive Jackpot Ticker */}
-        <div className="mt-3 bg-gradient-to-r from-[#1f0b12] to-[#2d0f1a] rounded-2xl p-2.5 border border-amber-500/60 shadow-inner flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-xs">
-            <Flame className="w-4 h-4 text-amber-400 fill-amber-400 animate-bounce" />
-            <span className="font-['Fredoka'] font-black uppercase tracking-wider text-yellow-300 text-[11px]">
-              Прогресивний Джекпот:
-            </span>
-          </div>
-
-          <div className="font-['Fredoka'] font-black text-base text-yellow-300 tracking-wider flex items-center gap-1 bg-[#120509] px-2.5 py-0.5 rounded-xl border border-yellow-500/40">
-            <Coins className="w-4 h-4 text-amber-400 fill-amber-400" />
-            {jackpotPool.toLocaleString()}
+          <div className="text-right">
+            <span className="text-[10px] text-pink-300 block font-semibold">Твій баланс</span>
+            <div className="font-['Fredoka'] font-bold text-sm text-yellow-200">
+              {balance.toLocaleString()} 🪙
+            </div>
           </div>
         </div>
       </div>
 
-      {/* 🎰 THE SLOT MACHINE CASINO CABINET */}
-      <div className="relative bg-gradient-to-b from-[#4a1b2a] via-[#35131d] to-[#220b13] rounded-3xl p-4 border-4 border-yellow-500/80 shadow-[0_12px_40px_rgba(0,0,0,0.6)]">
-        {/* Machine Top Crown Lights */}
-        <div className="flex items-center justify-between px-3 py-1 mb-3 bg-[#1e0a11] rounded-2xl border border-amber-600/60">
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444] animate-ping" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
-          </div>
-          <span className="font-['Fredoka'] font-bold text-xs tracking-widest text-amber-200 uppercase">
-            3-REEL BERRY CLASSIC
-          </span>
-          <div className="flex items-center gap-1">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 shadow-[0_0_8px_#10b981]" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 shadow-[0_0_8px_#facc15]" />
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500 shadow-[0_0_8px_#ef4444] animate-ping" />
-          </div>
-        </div>
+      {/* 🍬 6x5 GAME GRID (Semi-transparent candy frame encrusted with edible gold) */}
+      <div
+        className={`rounded-3xl p-3 border-4 shadow-2xl relative transition-all duration-500 ${
+          isFreeSpinsMode
+            ? "bg-purple-950/90 border-pink-400 shadow-[0_0_30px_rgba(244,63,94,0.4)]"
+            : "bg-pink-950/80 border-amber-300 shadow-[0_0_25px_rgba(245,158,11,0.3)]"
+        }`}
+      >
+        <div className="grid grid-cols-6 gap-1.5 sm:gap-2">
+          {grid.map((cell, index) => {
+            const isWinner = winningCellIndices.includes(index);
 
-        {/* 3 REEL SLOTS DISPLAY WITH LEVER */}
-        <div className="flex items-center gap-2">
-          {/* Main Reels Window */}
-          <div className="flex-1 bg-gradient-to-b from-[#14060b] via-[#0f0408] to-[#14060b] rounded-2xl p-3 border-4 border-[#612739] shadow-[inset_0_8px_20px_rgba(0,0,0,0.8)] relative overflow-hidden">
-            {/* Payline Golden Guide Center Line */}
-            <div className="absolute left-2 right-2 top-1/2 -translate-y-1/2 h-[2px] bg-gradient-to-r from-transparent via-amber-400/80 to-transparent pointer-events-none z-20 shadow-[0_0_8px_rgba(251,191,36,0.8)]" />
-
-            {/* Payline Markers */}
-            <div className="absolute left-0.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 font-black z-20">
-              ▶
-            </div>
-            <div className="absolute right-0.5 top-1/2 -translate-y-1/2 text-[10px] text-amber-400 font-black z-20">
-              ◀
-            </div>
-
-            {/* The 3 Reel Columns */}
-            <div className="grid grid-cols-3 gap-2.5 relative z-10">
-              {[0, 1, 2].map((reelIdx) => {
-                const isThisReelSpinning = reelSpinning[reelIdx];
-                const symbol = reels[reelIdx];
-                const isWinning = winningIndices.includes(reelIdx);
-
-                return (
-                  <div
-                    key={`reel-${reelIdx}`}
-                    className={`h-28 rounded-xl bg-gradient-to-b from-[#2a1019] via-[#3a1824] to-[#2a1019] border-2 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300 ${
-                      isWinning
-                        ? "border-yellow-300 shadow-[0_0_18px_rgba(253,224,71,0.9)] scale-105 bg-gradient-to-b from-[#4e1d2f] to-[#381320]"
-                        : "border-[#522131] shadow-inner"
-                    }`}
-                  >
-                    {isThisReelSpinning ? (
-                      /* Animated Reel Strip Blur during spin */
-                      <motion.div
-                        className="flex flex-col items-center gap-4 filter blur-[1.5px]"
-                        animate={{ y: [-120, 120] }}
-                        transition={{ repeat: Infinity, duration: 0.16, ease: "linear" }}
-                      >
-                        <span className="text-3xl opacity-80">🍓</span>
-                        <span className="text-3xl opacity-90">🍒</span>
-                        <span className="text-3xl opacity-90">🍇</span>
-                        <span className="text-3xl opacity-80">🫐</span>
-                        <span className="text-3xl opacity-90">🍉</span>
-                        <span className="text-3xl opacity-90">💎</span>
-                      </motion.div>
-                    ) : (
-                      /* Settled Symbol */
-                      <motion.div
-                        initial={{ scale: 0.8, y: -20 }}
-                        animate={{ scale: isWinning ? [1, 1.2, 1] : 1, y: 0 }}
-                        transition={{
-                          type: "spring",
-                          stiffness: 400,
-                          damping: 18,
-                          scale: isWinning ? { repeat: Infinity, duration: 0.6 } : undefined,
-                        }}
-                        className="flex flex-col items-center justify-center"
-                      >
-                        <span className="text-4xl filter drop-shadow-[0_4px_8px_rgba(0,0,0,0.5)] select-none">
-                          {symbol.icon}
-                        </span>
-                        <span
-                          className="text-[10px] font-['Fredoka'] font-bold tracking-tight mt-1"
-                          style={{ color: symbol.color }}
-                        >
-                          {symbol.name}
-                        </span>
-                      </motion.div>
-                    )}
-
-                    {/* Gloss highlight over glass */}
-                    <div className="absolute inset-0 bg-gradient-to-b from-white/10 via-transparent to-black/30 pointer-events-none" />
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* 🕹️ Mechanical Lever Arm on Right */}
-          <div className="flex flex-col items-center justify-center pr-1">
-            <button
-              onClick={handleSpin}
-              disabled={isSpinning || balance < bet}
-              className="group relative cursor-pointer active:scale-95 transition-transform"
-              title="Потягнути важіль"
-            >
-              <div className="w-5 h-28 bg-[#18080d] rounded-full border-2 border-[#541f30] flex flex-col items-center justify-between p-1 relative shadow-lg">
-                {/* Lever Ball Knob */}
-                <motion.div
-                  animate={{
-                    y: leverPulled ? 60 : 0,
-                    scale: leverPulled ? 0.9 : 1,
-                  }}
-                  transition={{ type: "spring", stiffness: 350, damping: 20 }}
-                  className="w-8 h-8 rounded-full bg-gradient-to-br from-red-500 via-red-600 to-amber-600 border-2 border-yellow-300 shadow-[0_4px_12px_rgba(239,68,68,0.7)] flex items-center justify-center text-xs absolute -left-1.5 top-0 z-30"
-                >
-                  <Sparkles className="w-3.5 h-3.5 text-yellow-200" />
-                </motion.div>
-
-                {/* Lever Slot Track */}
-                <div className="w-1.5 h-full bg-[#0d0306] rounded-full shadow-inner" />
-              </div>
-            </button>
-          </div>
-        </div>
-
-        {/* Win Status Display */}
-        <div className="min-h-[38px] mt-3 flex items-center justify-center">
-          <AnimatePresence mode="wait">
-            {winMessage ? (
+            return (
               <motion.div
-                key="win-msg"
-                initial={{ opacity: 0, scale: 0.8 }}
-                animate={{ opacity: 1, scale: 1 }}
-                exit={{ opacity: 0, scale: 0.8 }}
-                className="w-full py-1.5 px-3 bg-gradient-to-r from-amber-500 via-yellow-400 to-amber-500 text-amber-950 font-['Fredoka'] font-black text-center text-sm rounded-xl shadow-[0_0_15px_rgba(245,158,11,0.8)] border border-yellow-200 animate-pulse"
+                key={index}
+                initial={false}
+                animate={
+                  isWinner
+                    ? { scale: [1, 1.25, 0.9, 1.15], rotate: [0, -8, 8, 0] }
+                    : { scale: 1, rotate: 0 }
+                }
+                transition={{ duration: 0.4 }}
+                className={`h-12 sm:h-14 rounded-2xl flex flex-col items-center justify-center relative select-none border transition-all ${
+                  isWinner
+                    ? "bg-gradient-to-b from-yellow-300 to-amber-500 border-white shadow-[0_0_15px_#fde047] z-10"
+                    : "bg-pink-900/60 hover:bg-pink-900/80 border-pink-500/40 shadow-inner"
+                }`}
               >
-                {winMessage}
+                <span className="text-2xl sm:text-3xl filter drop-shadow-md">{cell.icon}</span>
+
+                {/* Multiplier badge for bomb */}
+                {cell.id === "multiplier_bomb" && cell.multiplierVal && (
+                  <span className="absolute -top-1 -right-1 bg-yellow-400 text-pink-950 text-[9px] font-black px-1 rounded-full border border-white shadow animate-pulse">
+                    x{cell.multiplierVal}
+                  </span>
+                )}
               </motion.div>
-            ) : isSpinning ? (
-              <motion.div
-                key="spinning-msg"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                className="text-xs text-amber-200 font-bold tracking-wider animate-pulse flex items-center gap-1.5"
-              >
-                <Sparkles className="w-3.5 h-3.5 text-yellow-300 animate-spin" />
-                Барабани крутяться... Хай пощастить! 🍀
-              </motion.div>
-            ) : (
-              <div className="text-xs text-pink-200/70 text-center font-medium">
-                Оберіть ставку та натисніть "КРУТИТИ"
-              </div>
-            )}
-          </AnimatePresence>
+            );
+          })}
         </div>
 
-        {/* 🪙 BET CONTROLS & CHIPS */}
-        <div className="bg-[#240b13] rounded-2xl p-3 border border-amber-600/50 mt-2 flex flex-col gap-2.5">
-          {/* Bet Amount Row */}
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-xs text-amber-200 font-semibold">
-              <span>Ставка:</span>
-              <div className="bg-[#120509] px-3 py-1 rounded-xl border border-amber-500/60 font-['Fredoka'] font-bold text-yellow-300 text-sm flex items-center gap-1 shadow-inner">
-                <Coins className="w-3.5 h-3.5 text-amber-400" />
-                {bet.toLocaleString()}
-              </div>
-            </div>
-
-            {/* Quick Step Buttons */}
-            <div className="flex items-center gap-1">
-              <button
-                onClick={() => handleBetChange(bet - 50)}
-                disabled={isSpinning || bet <= 10}
-                className="px-2 py-1 bg-[#3a131e] hover:bg-[#4d1a29] text-amber-200 rounded-lg text-xs font-bold border border-amber-800 disabled:opacity-40"
-              >
-                -50
-              </button>
-              <button
-                onClick={() => handleBetChange(bet + 50)}
-                disabled={isSpinning || bet >= balance}
-                className="px-2 py-1 bg-[#3a131e] hover:bg-[#4d1a29] text-amber-200 rounded-lg text-xs font-bold border border-amber-800 disabled:opacity-40"
-              >
-                +50
-              </button>
-              <button
-                onClick={() => handleBetChange(balance)}
-                disabled={isSpinning || balance <= 0}
-                className="px-2 py-1 bg-gradient-to-r from-red-600 to-amber-600 hover:from-red-500 hover:to-amber-500 text-white rounded-lg text-xs font-['Fredoka'] font-bold border border-yellow-300 shadow-sm"
-              >
-                МАКС
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Bet Chips Scrollable */}
-          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-            {QUICK_BETS.map((chip) => {
-              const isSelected = bet === chip;
-              return (
-                <button
-                  key={`chip-${chip}`}
-                  onClick={() => handleBetChange(chip)}
-                  disabled={isSpinning}
-                  className={`px-2.5 py-1 rounded-xl text-xs font-['Fredoka'] font-bold shrink-0 border transition-all ${
-                    isSelected
-                      ? "bg-gradient-to-b from-amber-400 to-amber-600 text-amber-950 border-yellow-200 shadow-md scale-105"
-                      : "bg-[#1d080f] text-amber-200/80 border-amber-900/60 hover:bg-[#2d0f19]"
-                  }`}
-                >
-                  🪙 {chip >= 1000 ? `${chip / 1000}k` : chip}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* 🚀 MAIN SPIN & AUTO-SPIN CONTROLS */}
-        <div className="grid grid-cols-4 gap-2 mt-3">
-          {/* Big Spin Button (Takes 3 columns) */}
-          <button
-            id="btn-casino-spin"
-            onClick={handleSpin}
-            disabled={isSpinning || balance < bet}
-            className={`col-span-3 py-3 rounded-2xl font-['Fredoka'] font-black text-base shadow-[0_6px_20px_rgba(245,158,11,0.4)] border-2 flex items-center justify-center gap-2 transition-all ${
-              balance >= bet && !isSpinning
-                ? "bg-gradient-to-r from-yellow-400 via-amber-500 to-yellow-400 hover:from-yellow-300 hover:to-amber-400 active:scale-95 text-amber-950 border-yellow-100"
-                : "bg-gray-800/60 text-gray-500 border-gray-700 cursor-not-allowed"
-            }`}
+        {/* Win Notification Banner */}
+        {winTitle && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            className="mt-2.5 p-2 bg-gradient-to-r from-amber-400 via-pink-500 to-purple-600 text-white font-['Fredoka'] font-black text-center text-xs sm:text-sm rounded-xl border border-yellow-200 shadow-xl"
           >
-            <Sparkles className="w-5 h-5 text-amber-950" />
-            {isSpinning ? "КРУТИТЬСЯ..." : `КРУТИТИ (🪙 ${bet})`}
-          </button>
-
-          {/* Auto-Spin Toggle Button */}
-          {isAutoSpinning ? (
-            <button
-              onClick={stopAutoSpins}
-              className="py-3 px-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 text-white rounded-2xl font-['Fredoka'] font-bold text-xs border border-red-300 flex flex-col items-center justify-center gap-0.5 shadow-lg animate-pulse"
-            >
-              <Square className="w-4 h-4 fill-white" />
-              <span>СТОП ({autoSpinCount})</span>
-            </button>
-          ) : (
-            <button
-              onClick={() => startAutoSpins(10)}
-              disabled={isSpinning || balance < bet}
-              className="py-3 px-2 bg-[#31111b] hover:bg-[#471826] active:scale-95 text-amber-200 rounded-2xl font-['Fredoka'] font-bold text-xs border border-amber-700/60 flex flex-col items-center justify-center gap-0.5 shadow transition-all disabled:opacity-40"
-            >
-              <Zap className="w-4 h-4 text-yellow-400" />
-              <span>АВТО 10×</span>
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 📜 PAYTABLE ACCORDION / DRAWER */}
-      <div className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl">
-        <button
-          onClick={() => {
-            triggerHaptic("light");
-            setShowPaytable(!showPaytable);
-          }}
-          className="w-full flex items-center justify-between text-amber-200 font-['Fredoka'] font-bold text-sm"
-        >
-          <div className="flex items-center gap-2">
-            <Trophy className="w-4 h-4 text-amber-400" />
-            Таблиця ягідних коефіцієнтів
-          </div>
-          {showPaytable ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-        </button>
-
-        {showPaytable && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3 pt-3 border-t border-emerald-800">
-            {SYMBOLS.map((item) => (
-              <div
-                key={item.id}
-                className="bg-[#18311a] p-2.5 rounded-2xl border border-emerald-800 flex items-center gap-2"
-              >
-                <span className="text-2xl">{item.icon}</span>
-                <div>
-                  <div className="font-['Fredoka'] font-bold text-xs text-amber-100">
-                    {item.name}
-                  </div>
-                  <div className="text-[11px] font-bold text-yellow-300">
-                    3× = {item.payout3}× ставка
-                  </div>
-                  {item.payout2 && (
-                    <div className="text-[10px] text-emerald-300">2× = {item.payout2}×</div>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+            {winTitle}
+          </motion.div>
         )}
       </div>
 
-      {/* 🕒 SPIN HISTORY LOG */}
-      {spinHistory.length > 0 && (
-        <div className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl flex flex-col gap-2">
-          <div className="flex items-center justify-between text-xs font-['Fredoka'] text-amber-200 font-bold">
-            <span className="flex items-center gap-1.5">
-              <RotateCcw className="w-3.5 h-3.5 text-amber-400" />
-              Останні обертання
-            </span>
-            <span className="text-[11px] text-emerald-300">Всього: {spinHistory.length}</span>
+      {/* 🎮 3D Hard-Candy Controls & Bet Adjusters */}
+      <div className="bg-[#1f162e] rounded-3xl p-3 border-2 border-pink-500/60 shadow-xl flex flex-col gap-2.5">
+        {/* Quick Bet Buttons */}
+        <div className="flex items-center justify-between gap-1 overflow-x-auto pb-1 scrollbar-none">
+          <span className="text-[11px] text-pink-300 font-bold pl-1 shrink-0">Ставка:</span>
+          {QUICK_BETS.map((amt) => (
+            <button
+              key={amt}
+              onClick={() => handleBetChange(amt)}
+              disabled={isSpinning}
+              className={`px-2.5 py-1 rounded-xl text-xs font-['Fredoka'] font-bold shrink-0 transition-all ${
+                bet === amt
+                  ? "bg-gradient-to-r from-yellow-300 to-amber-400 text-pink-950 shadow-md border border-white scale-105"
+                  : "bg-pink-950/80 text-pink-200 hover:text-white border border-pink-800"
+              }`}
+            >
+              {amt}
+            </button>
+          ))}
+        </div>
+
+        {/* Spin Action Section */}
+        <div className="flex items-center gap-2">
+          {/* Bet Stepper Input */}
+          <div className="flex items-center bg-[#130b1c] rounded-2xl border border-pink-500/50 p-1 flex-1">
+            <button
+              onClick={() => handleBetChange(Math.max(10, bet - 50))}
+              disabled={isSpinning}
+              className="w-8 h-8 rounded-xl bg-pink-900/60 hover:bg-pink-800 text-yellow-300 font-bold text-sm"
+            >
+              -
+            </button>
+            <div className="flex-1 text-center font-['Fredoka'] font-black text-yellow-300 text-sm">
+              🪙 {bet.toLocaleString()}
+            </div>
+            <button
+              onClick={() => handleBetChange(bet + 50)}
+              disabled={isSpinning}
+              className="w-8 h-8 rounded-xl bg-pink-900/60 hover:bg-pink-800 text-yellow-300 font-bold text-sm"
+            >
+              +
+            </button>
           </div>
 
-          <div className="flex flex-col gap-1.5 mt-1">
-            {spinHistory.map((item) => (
-              <div
-                key={item.id}
-                className="bg-[#18311a] px-3 py-2 rounded-xl border border-emerald-800 flex items-center justify-between text-xs"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="text-base tracking-widest">{item.icons.join(" ")}</span>
-                  <span className="text-[10px] text-emerald-300/80">{item.time}</span>
-                </div>
+          {/* Main 3D Candy Spin Button */}
+          <button
+            id="btn-spin-candy"
+            onClick={handleSpin}
+            disabled={isSpinning}
+            className={`flex-2 py-3 px-6 rounded-2xl font-['Fredoka'] font-black text-sm uppercase tracking-wider shadow-2xl border-2 flex items-center justify-center gap-2 transition-all active:scale-95 ${
+              isSpinning
+                ? "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
+                : "bg-gradient-to-r from-pink-500 via-rose-500 to-yellow-400 hover:from-pink-400 hover:to-yellow-300 text-white border-yellow-200 shadow-pink-600/50 animate-pulse"
+            }`}
+          >
+            <Sparkles className="w-5 h-5 text-yellow-200" />
+            {isSpinning ? "Крутимо..." : `КРУТИТИ (${bet} 🪙)`}
+          </button>
+        </div>
+      </div>
 
-                <div className="text-right font-['Fredoka']">
-                  {item.win > 0 ? (
-                    <span className="font-bold text-yellow-300 bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-700">
-                      +🪙 {item.win.toLocaleString()}
-                    </span>
-                  ) : (
-                    <span className="text-gray-400 text-[11px]">-🪙 {item.bet}</span>
-                  )}
+      {/* Paytable & Rules Drawer */}
+      {showPaytable && (
+        <div className="bg-[#1b1227] rounded-3xl p-4 border border-pink-500/50 shadow-xl flex flex-col gap-2 text-xs">
+          <div className="flex items-center justify-between border-b border-pink-800 pb-1.5">
+            <h4 className="font-['Fredoka'] font-bold text-sm text-yellow-300">
+              🍬 Candy Utopia: Правила та Виплати (8+ однакових)
+            </h4>
+            <button
+              onClick={() => setShowPaytable(false)}
+              className="text-pink-300 font-bold text-xs"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2">
+            {CANDY_SYMBOLS.filter((s) => s.type !== "multiplier").map((s) => (
+              <div
+                key={s.id}
+                className="flex items-center justify-between p-2 rounded-xl bg-pink-950/60 border border-pink-800/60"
+              >
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xl">{s.icon}</span>
+                  <span className="text-[11px] text-pink-100 font-semibold">{s.name}</span>
+                </div>
+                <div className="text-right text-[10px] text-yellow-300 font-bold">
+                  8+: x{s.payout8_9} | 12+: x{s.payout12_plus}
                 </div>
               </div>
             ))}
           </div>
+
+          <p className="text-[11px] text-pink-300 mt-1">
+            🍭 <b>4+ Скаттери (Леденці):</b> Запускають 10 Безкоштовних Обертань (Free Spins).<br />
+            💣 <b>Цукрові Бомби (x2-x100):</b> Множать суму всіх виграшів у поточному каскаді!
+          </p>
         </div>
       )}
     </div>
