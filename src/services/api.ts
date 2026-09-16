@@ -4,7 +4,23 @@ import { GameState, ActionResponse, LeaderboardResponse, EconomyPrices } from ".
 export const PERMANENT_BACKEND_URL = "https://artemfurry.pythonanywhere.com";
 
 export function getBaseUrl(): string {
-  return PERMANENT_BACKEND_URL;
+  if (typeof window !== "undefined") {
+    const custom = localStorage.getItem("farmer_custom_backend_url")?.trim();
+    if (custom) return custom.replace(/\/$/, "");
+  }
+  return (import.meta.env.VITE_API_URL || PERMANENT_BACKEND_URL).replace(/\/$/, "");
+}
+
+export function getCustomBackendUrl(): string {
+  if (typeof window === "undefined") return "";
+  return localStorage.getItem("farmer_custom_backend_url") || getBaseUrl();
+}
+
+export function setCustomBackendUrl(url: string) {
+  if (typeof window === "undefined") return;
+  const normalized = url.replace(/\/$/, "");
+  if (normalized) localStorage.setItem("farmer_custom_backend_url", normalized);
+  else localStorage.removeItem("farmer_custom_backend_url");
 }
 
 export function getSavedTelegramId(): string | null {
@@ -39,9 +55,6 @@ export function clearTelegramCredentials() {
 
 function getHeaders(): HeadersInit {
   const initData = getTelegramInitData();
-  const savedId = getSavedTelegramId();
-  const savedName = getSavedTelegramName();
-  const tgUser = getTelegramUser();
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -49,19 +62,6 @@ function getHeaders(): HeadersInit {
 
   if (initData) {
     headers["X-Telegram-Init-Data"] = initData;
-    headers["X-Init-Data"] = initData;
-  }
-
-  const userId = savedId || (tgUser ? String(tgUser.id) : null);
-  if (userId) {
-    headers["X-Telegram-User-Id"] = userId;
-  }
-
-  const userName =
-    savedName ||
-    (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username : null);
-  if (userName) {
-    headers["X-Telegram-User-Name"] = encodeURIComponent(userName);
   }
 
   return headers;
