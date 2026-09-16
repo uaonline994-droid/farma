@@ -38,19 +38,19 @@ export interface SlotSymbol {
 }
 
 export const CLASSIC_SYMBOLS: SlotSymbol[] = [
-  { id: "seven", name: "Три Сімки 777", icon: "7️⃣", payout3: 15, payout4: 50, color: "#ef4444", weight: 8 },
-  { id: "diamond", name: "Діамант", icon: "💎", payout3: 10, payout4: 30, color: "#38bdf8", weight: 12 },
-  { id: "crown", name: "Золота Корона", icon: "👑", payout3: 8, payout4: 20, color: "#eab308", weight: 15 },
-  { id: "bell", name: "Золотий Дзвін", icon: "🔔", payout3: 5, payout4: 12, color: "#facc15", weight: 20 },
-  { id: "clover", name: "Конюшина Удачі", icon: "🍀", payout3: 4, payout4: 8, color: "#22c55e", weight: 25 },
-  { id: "cherry", name: "Вишні", icon: "🍒", payout3: 3, payout4: 6, color: "#f43f5e", weight: 30 },
-  { id: "grape", name: "Виноград", icon: "🍇", payout3: 2, payout4: 5, color: "#a855f7", weight: 35 },
-  { id: "lemon", name: "Лимон", icon: "🍋", payout3: 1.5, payout4: 4, color: "#fde047", weight: 40 },
+  { id: "seven", name: "Три Сімки 777", icon: "7️⃣", payout3: 30, payout4: 150, color: "#ef4444", weight: 6 },
+  { id: "diamond", name: "Діамант", icon: "💎", payout3: 20, payout4: 80, color: "#38bdf8", weight: 10 },
+  { id: "crown", name: "Золота Корона", icon: "👑", payout3: 15, payout4: 50, color: "#eab308", weight: 14 },
+  { id: "bell", name: "Золотий Дзвін", icon: "🔔", payout3: 10, payout4: 30, color: "#facc15", weight: 18 },
+  { id: "clover", name: "Конюшина Удачі", icon: "🍀", payout3: 8, payout4: 20, color: "#22c55e", weight: 24 },
+  { id: "cherry", name: "Вишні", icon: "🍒", payout3: 6, payout4: 15, color: "#f43f5e", weight: 30 },
+  { id: "grape", name: "Виноград", icon: "🍇", payout3: 4, payout4: 10, color: "#a855f7", weight: 35 },
+  { id: "lemon", name: "Лимон", icon: "🍋", payout3: 3, payout4: 8, color: "#fde047", weight: 40 },
 ];
 
 export interface MultiplierDrop {
   index: number; // slot 0-11
-  multiplier: number; // x2, x3, x5, x10, x25, x50, x100
+  multiplier: number; // x2, x3, x5, x10
 }
 
 // 3x4 Grid (3 Rows, 4 Columns)
@@ -71,7 +71,7 @@ const PAYLINES = [
   [8, 5, 6, 11],
 ];
 
-const MULTIPLIERS_POOL = [2, 2, 2, 3, 3, 5, 5, 10, 25, 50, 100];
+const MULTIPLIERS_POOL = [2, 2, 3, 3, 5, 10];
 
 // Helper to pick random symbol based on weight
 const getRandomSymbol = (): string => {
@@ -328,10 +328,10 @@ export const CasinoView: React.FC<{
     const nextGrid: string[] = Array.from({ length: 12 }, () => getRandomSymbol());
     setTargetGrid(nextGrid);
 
-    // 2. Multiplier drops chance (35% chance)
+    // 2. Multiplier drops chance (12% rare bonus)
     const multipliers: MultiplierDrop[] = [];
-    if (Math.random() < 0.35) {
-      const dropCount = Math.random() < 0.25 ? 2 : 1;
+    if (Math.random() < 0.12) {
+      const dropCount = Math.random() < 0.15 ? 2 : 1;
       const chosenIndexes = new Set<number>();
       for (let d = 0; d < dropCount; d++) {
         const cellIdx = Math.floor(Math.random() * 12);
@@ -377,10 +377,11 @@ export const CasinoView: React.FC<{
       triggerHaptic("medium");
     }
 
-    // 3. Evaluate Wins across paylines
+    // 3. Evaluate Wins across paylines with authentic line bet
     let baseWin = 0;
     const hitLines: number[][] = [];
     const hitCells = new Set<number>();
+    const lineBet = Math.max(1, bet / PAYLINES.length);
 
     PAYLINES.forEach((line) => {
       const sym0 = nextGrid[line[0]];
@@ -392,7 +393,7 @@ export const CasinoView: React.FC<{
       if (sym0 === sym1 && sym1 === sym2 && sym2 === sym3) {
         const item = CLASSIC_SYMBOLS.find((s) => s.icon === sym0);
         if (item) {
-          const payout = bet * item.payout4;
+          const payout = Math.round(lineBet * item.payout4);
           baseWin += payout;
           hitLines.push(line);
           line.forEach((idx) => hitCells.add(idx));
@@ -402,7 +403,7 @@ export const CasinoView: React.FC<{
       else if (sym0 === sym1 && sym1 === sym2) {
         const item = CLASSIC_SYMBOLS.find((s) => s.icon === sym0);
         if (item) {
-          const payout = bet * item.payout3;
+          const payout = Math.round(lineBet * item.payout3);
           baseWin += payout;
           hitLines.push([line[0], line[1], line[2]]);
           hitCells.add(line[0]);
@@ -412,7 +413,7 @@ export const CasinoView: React.FC<{
       } else if (sym1 === sym2 && sym2 === sym3) {
         const item = CLASSIC_SYMBOLS.find((s) => s.icon === sym1);
         if (item) {
-          const payout = bet * item.payout3;
+          const payout = Math.round(lineBet * item.payout3);
           baseWin += payout;
           hitLines.push([line[1], line[2], line[3]]);
           hitCells.add(line[1]);
@@ -658,14 +659,14 @@ export const CasinoView: React.FC<{
         </div>
 
         {/* Preset Chips */}
-        <div className="grid grid-cols-5 gap-1.5">
-          {[100, 500, 1000, 5000, 25000].map((amt) => (
+        <div className="grid grid-cols-6 gap-1.5">
+          {[100, 500, 2500, 10000, 50000, 250000].map((amt) => (
             <button
               key={amt}
               id={`btn-bet-${amt}`}
               onClick={() => handleBetSelect(amt)}
               disabled={isSpinning}
-              className={`py-1.5 px-1 rounded-xl font-['Fredoka'] font-bold text-xs border transition-all cursor-pointer ${
+              className={`py-1.5 px-0.5 rounded-xl font-['Fredoka'] font-bold text-[11px] sm:text-xs border transition-all cursor-pointer ${
                 bet === amt
                   ? "bg-gradient-to-b from-yellow-400 to-amber-500 text-amber-950 border-yellow-200 shadow-md scale-105"
                   : "bg-[#2c1010] text-amber-200 border-yellow-900/60 hover:bg-[#3d1818]"
@@ -690,11 +691,11 @@ export const CasinoView: React.FC<{
           />
           <button
             type="button"
-            onClick={() => handleBetSelect(Math.max(100, Math.min(balance, 100000)))}
+            onClick={() => handleBetSelect(Math.max(10, Math.min(balance, 10000000)))}
             disabled={isSpinning || balance <= 0}
             className="px-3 py-2 bg-red-800/40 hover:bg-red-800/60 text-yellow-300 text-xs font-bold rounded-xl border border-yellow-500/40 transition-all cursor-pointer"
           >
-            Макс ({Math.min(balance, 100000).toLocaleString()} 🪙)
+            Макс ({Math.min(balance, 10000000).toLocaleString()} 🪙)
           </button>
         </div>
 
@@ -777,7 +778,7 @@ export const CasinoView: React.FC<{
           </div>
 
           <div className="bg-gradient-to-r from-red-950 to-amber-950 p-2.5 rounded-xl border border-yellow-500/40 text-[11px] text-amber-200">
-            💥 <b>Випадкові ікси:</b> під час спіну на полі можуть випадково впасти бонуси <b>×2, ×3, ×5, ×10, ×25, ×50, ×100</b>, які множать будь-який лінійний виграш!
+            💥 <b>Випадкові ікси:</b> під час спіну на осередках можуть випадково випасти множники <b>×2, ×3, ×5, ×10</b>, які сумарно помножують лінійний виграш!
           </div>
         </div>
       )}
