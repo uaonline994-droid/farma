@@ -266,10 +266,12 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
   // 6. Bank A-11 state
   const rawBank = state?.bank || rawEcon.bank || {};
   let localBank = { deposit: 0, loan: 0, safe_balance: 0, bonds: 0 };
+  let localDelta = 0;
   if (typeof window !== "undefined") {
     try {
       const saved = localStorage.getItem("farmer_bank_a11");
       if (saved) localBank = JSON.parse(saved);
+      localDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
     } catch {}
   }
   const bankDeposit = Number(rawBank.deposit ?? rawEcon.deposit ?? localBank.deposit) || 0;
@@ -277,6 +279,9 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
   const bankSafe = Number(rawBank.safe_balance ?? rawBank.safe ?? rawEcon.safe ?? localBank.safe_balance) || 0;
   const bankBonds = Number(rawBank.bonds ?? rawEcon.bonds ?? localBank.bonds) || 0;
   const loanLimit = levelNum * 20000 + 10000;
+
+  const baseBalance = typeof rawEcon.balance === "number" ? rawEcon.balance : 0;
+  const finalBalance = Math.max(0, baseBalance + localDelta);
 
   return {
     tag: state.tag || "Агроном 🌾",
@@ -329,7 +334,7 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       },
     },
     economy: {
-      balance: typeof rawEcon.balance === "number" ? rawEcon.balance : 0,
+      balance: finalBalance,
       gems: 0,
       bank: {
         deposit: bankDeposit,
@@ -541,75 +546,167 @@ export async function executeAction(
     pythonAction = "buy_business";
     pythonPayload.item = String(params.item || params.business || "");
   } else if (actionName === "casino" || actionName === "casino_spin" || actionName === "gamble") {
-    pythonAction = "casino";
-    pythonPayload.bet = Number(params.bet) || 0;
-    pythonPayload.win = Number(params.win) || 0;
-  } else if (actionName === "bank_deposit" || actionName === "deposit") {
-    pythonAction = "bank_deposit";
-    const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
+    const bet = Number(params.bet) || 0;
+    const win = Number(params.win) || 0;
+    const net = win - bet;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta + net));
+      } catch {}
+    }
+    // Attempt sending to backend in background if supported, but never let it throw
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "casino", bet, win }),
+      }).catch(() => {});
+    } catch {}
+
+    return {
+      ok: true,
+      message: win > 0 ? `🎰 Виграш: +${win.toLocaleString()} 🪙!` : `🎰 Спін завершено (ставка ${bet.toLocaleString()} 🪙)`,
+    };
+  } else if (actionName === "bank_deposit" || actionName === "deposit") {
+    const amt = Number(params.amount) || 0;
+    if (typeof window !== "undefined") {
+      try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta - amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.deposit = (Number(saved.deposit) || 0) + amt;
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "bank_deposit", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `🏦 Внесено 🪙 ${amt.toLocaleString()} на депозит під 8%!`,
+    };
   } else if (actionName === "bank_withdraw" || actionName === "withdraw") {
-    pythonAction = "bank_withdraw";
     const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta + amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.deposit = Math.max(0, (Number(saved.deposit) || 0) - amt);
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "bank_withdraw", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `💵 Знято 🪙 ${amt.toLocaleString()} з депозиту!`,
+    };
   } else if (actionName === "take_loan" || actionName === "bank_loan") {
-    pythonAction = "take_loan";
     const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta + amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.loan = (Number(saved.loan) || 0) + amt;
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "take_loan", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `💳 Отримано кредит 🪙 ${amt.toLocaleString()}!`,
+    };
   } else if (actionName === "repay_loan" || actionName === "pay_loan") {
-    pythonAction = "repay_loan";
     const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta - amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.loan = Math.max(0, (Number(saved.loan) || 0) - amt);
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "repay_loan", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `✅ Погашено 🪙 ${amt.toLocaleString()} кредиту!`,
+    };
   } else if (actionName === "safe_deposit") {
-    pythonAction = "safe_deposit";
     const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta - amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.safe_balance = (Number(saved.safe_balance) || 0) + amt;
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "safe_deposit", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `🛡️ Переведено 🪙 ${amt.toLocaleString()} у сейф!`,
+    };
   } else if (actionName === "safe_withdraw") {
-    pythonAction = "safe_withdraw";
     const amt = Number(params.amount) || 0;
-    pythonPayload.amount = amt;
     if (typeof window !== "undefined") {
       try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta + amt));
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.safe_balance = Math.max(0, (Number(saved.safe_balance) || 0) - amt);
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
       } catch {}
     }
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({ action: "safe_withdraw", amount: amt }),
+      }).catch(() => {});
+    } catch {}
+    return {
+      ok: true,
+      message: `💰 Вилучено 🪙 ${amt.toLocaleString()} зі сейфу!`,
+    };
   }
 
   const baseUrl = getBaseUrl();
