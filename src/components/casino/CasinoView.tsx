@@ -12,20 +12,16 @@ import {
   playChipSound,
 } from "../../services/sound";
 import {
-  Coins,
   Sparkles,
   Volume2,
   VolumeX,
-  RotateCcw,
   Trophy,
   Info,
   Flame,
-  Zap,
   Play,
   Square,
-  Stars,
-  Sparkle,
   Crown,
+  Zap,
 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion, AnimatePresence } from "motion/react";
@@ -77,6 +73,175 @@ const PAYLINES = [
 
 const MULTIPLIERS_POOL = [2, 2, 2, 3, 3, 5, 5, 10, 25, 50, 100];
 
+// Helper to pick random symbol based on weight
+const getRandomSymbol = (): string => {
+  const totalWeight = CLASSIC_SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
+  let rand = Math.random() * totalWeight;
+  for (const sym of CLASSIC_SYMBOLS) {
+    if (rand < sym.weight) return sym.icon;
+    rand -= sym.weight;
+  }
+  return CLASSIC_SYMBOLS[CLASSIC_SYMBOLS.length - 1].icon;
+};
+
+// Generate an authentic physics reel strip
+const generateReelStrip = (target3: string[], count = 24): string[] => {
+  const intermediate: string[] = [];
+  for (let i = 0; i < count; i++) {
+    intermediate.push(getRandomSymbol());
+  }
+  return [...intermediate, ...target3];
+};
+
+interface ReelColumnProps {
+  colIndex: number;
+  currentSymbols: string[]; // 3 symbols [row0, row1, row2]
+  isSpinning: boolean;
+  targetSymbols: string[];
+  winningRowIndexes: number[];
+  multiplierDrops: { row: number; multiplier: number }[];
+  duration: number; // in ms
+  onStop: () => void;
+}
+
+const ReelColumn: React.FC<ReelColumnProps> = ({
+  colIndex,
+  currentSymbols,
+  isSpinning,
+  targetSymbols,
+  winningRowIndexes,
+  multiplierDrops,
+  duration,
+  onStop,
+}) => {
+  const [strip, setStrip] = useState<string[]>(currentSymbols);
+  const [offsetY, setOffsetY] = useState<number>(0);
+  const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const cellHeight = 76; // px per row cell
+
+  useEffect(() => {
+    if (isSpinning) {
+      // Build a strip of random symbols ending with the target 3
+      const newStrip = generateReelStrip(targetSymbols, 22 + colIndex * 4);
+      setStrip(newStrip);
+      setOffsetY(0);
+      setIsAnimating(true);
+
+      // Target travel distance
+      const totalSymbols = newStrip.length;
+      const targetOffset = (totalSymbols - 3) * cellHeight;
+
+      // Start anticipation then full momentum spin
+      const timer = setTimeout(() => {
+        setOffsetY(-targetOffset);
+      }, 50);
+
+      // Animation complete handler
+      const stopTimer = setTimeout(() => {
+        setIsAnimating(false);
+        setStrip(targetSymbols);
+        setOffsetY(0);
+        onStop();
+      }, duration);
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(stopTimer);
+      };
+    } else {
+      setStrip(currentSymbols);
+      setOffsetY(0);
+      setIsAnimating(false);
+    }
+  }, [isSpinning, targetSymbols, duration, colIndex]);
+
+  return (
+    <div
+      className="relative flex-1 h-[228px] overflow-hidden rounded-2xl bg-[#140505] border border-yellow-900/60 shadow-inner select-none"
+      style={{ minWidth: 0 }}
+    >
+      {/* Top & Bottom Glass Reflection / Shading Overlays */}
+      <div className="absolute inset-x-0 top-0 h-8 bg-gradient-to-b from-black/80 via-black/40 to-transparent z-20 pointer-events-none" />
+      <div className="absolute inset-x-0 bottom-0 h-8 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-20 pointer-events-none" />
+
+      {/* Subtle Horizontal Payline Dividers */}
+      <div className="absolute top-[76px] inset-x-0 h-[1px] bg-yellow-500/15 z-10 pointer-events-none" />
+      <div className="absolute top-[152px] inset-x-0 h-[1px] bg-yellow-500/15 z-10 pointer-events-none" />
+
+      {/* Physics Animated Vertical Strip */}
+      <motion.div
+        className="flex flex-col w-full"
+        animate={{ y: offsetY }}
+        transition={
+          isAnimating
+            ? {
+                duration: duration / 1000,
+                // Authentic Slot Machine Easing: fast anticipation, high momentum, elastic spring bounce at landing
+                ease: [0.15, 0.9, 0.25, 1.08],
+              }
+            : { duration: 0 }
+        }
+      >
+        {strip.map((symbol, sIdx) => {
+          // If stopped, check if this row is a winning row
+          const isTargetRow = !isAnimating && sIdx < 3;
+          const isWinner = isTargetRow && winningRowIndexes.includes(sIdx);
+          const drop = isTargetRow ? multiplierDrops.find((m) => m.row === sIdx) : null;
+
+          return (
+            <div
+              key={sIdx}
+              className={`h-[76px] w-full flex items-center justify-center relative transition-all duration-300 ${
+                isWinner
+                  ? "bg-gradient-to-b from-yellow-400/30 via-amber-500/40 to-yellow-600/30 shadow-[inset_0_0_15px_rgba(250,204,21,0.6)]"
+                  : ""
+              }`}
+            >
+              {/* Symbol Icon with Motion Blur during High Speed */}
+              <motion.span
+                animate={
+                  isWinner
+                    ? {
+                        scale: [1, 1.15, 1],
+                        rotate: [0, -4, 4, 0],
+                      }
+                    : {}
+                }
+                transition={{
+                  repeat: isWinner ? Infinity : 0,
+                  duration: 0.6,
+                }}
+                className={`text-3xl sm:text-4xl filter drop-shadow-md select-none ${
+                  isAnimating ? "blur-[0.8px] opacity-80" : ""
+                }`}
+              >
+                {symbol}
+              </motion.span>
+
+              {/* Multiplier Drop Badge with Spring Pop */}
+              {drop && (
+                <motion.div
+                  initial={{ scale: 0, rotate: -25 }}
+                  animate={{ scale: [0, 1.3, 0.95, 1], rotate: 0 }}
+                  transition={{ type: "spring", stiffness: 350, damping: 15 }}
+                  className="absolute top-1 right-1 bg-gradient-to-r from-red-600 via-amber-500 to-yellow-400 text-yellow-950 font-['Fredoka'] font-black text-[10px] sm:text-[11px] px-1.5 py-0.5 rounded-lg border border-yellow-200 shadow-[0_0_10px_rgba(234,179,8,0.8)] z-30"
+                >
+                  ×{drop.multiplier}
+                </motion.div>
+              )}
+
+              {/* Glowing Winner Frame */}
+              {isWinner && (
+                <div className="absolute inset-1 rounded-xl border-2 border-yellow-300 shadow-[0_0_15px_rgba(250,204,21,0.9)] animate-pulse pointer-events-none" />
+              )}
+            </div>
+          );
+        })}
+      </motion.div>
+    </div>
+  );
+};
+
 export const CasinoView: React.FC<{
   onAction: (actionName: string, params?: Record<string, unknown>) => Promise<void>;
   isLoading?: boolean;
@@ -86,12 +251,18 @@ export const CasinoView: React.FC<{
   const balance = gameState?.economy.balance ?? 0;
 
   // 3x4 Grid State: 12 cells
+  // Layout:
+  // Col 0: [0, 4, 8]
+  // Col 1: [1, 5, 9]
+  // Col 2: [2, 6, 10]
+  // Col 3: [3, 7, 11]
   const [grid, setGrid] = useState<string[]>(() => [
     "7️⃣", "💎", "👑", "🔔",
     "🍒", "7️⃣", "🍀", "🍇",
     "🔔", "💎", "7️⃣", "🍋",
   ]);
 
+  const [targetGrid, setTargetGrid] = useState<string[]>(grid);
   const [activeMultipliers, setActiveMultipliers] = useState<MultiplierDrop[]>([]);
   const [totalMultiplier, setTotalMultiplier] = useState<number>(1);
   const [winningLines, setWinningLines] = useState<number[][]>([]);
@@ -100,7 +271,7 @@ export const CasinoView: React.FC<{
   const [bet, setBet] = useState<number>(500);
   const [customBetInput, setCustomBetInput] = useState<string>("500");
   const [isSpinning, setIsSpinning] = useState<boolean>(false);
-  const [spinningReels, setSpinningReels] = useState<boolean[]>([false, false, false, false]);
+  const [spinningColumns, setSpinningColumns] = useState<boolean[]>([false, false, false, false]);
 
   const [lastWin, setLastWin] = useState<number>(0);
   const [winMessage, setWinMessage] = useState<string | null>(null);
@@ -114,17 +285,6 @@ export const CasinoView: React.FC<{
 
   // Sound toggle
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-
-  // Helper to pick random symbol
-  const getRandomSymbol = () => {
-    const totalWeight = CLASSIC_SYMBOLS.reduce((sum, s) => sum + s.weight, 0);
-    let rand = Math.random() * totalWeight;
-    for (const sym of CLASSIC_SYMBOLS) {
-      if (rand < sym.weight) return sym.icon;
-      rand -= sym.weight;
-    }
-    return CLASSIC_SYMBOLS[CLASSIC_SYMBOLS.length - 1].icon;
-  };
 
   const handleBetSelect = (amount: number) => {
     if (isSpinning) return;
@@ -142,7 +302,7 @@ export const CasinoView: React.FC<{
     }
   };
 
-  // Perform Spin
+  // Perform Physics-Driven Spin
   const spinReels = async () => {
     if (isSpinning || isLoading) return;
     if (balance < bet) {
@@ -164,22 +324,14 @@ export const CasinoView: React.FC<{
     triggerHaptic("heavy");
     if (soundEnabled) playLeverPullSound();
 
-    // Start 4 reel spinning animations
-    setSpinningReels([true, true, true, true]);
+    // 1. Generate final target 12 cells
+    const nextGrid: string[] = Array.from({ length: 12 }, () => getRandomSymbol());
+    setTargetGrid(nextGrid);
 
-    // Fast ticker for spinning visual
-    const spinInterval = setInterval(() => {
-      setGrid((prev) => prev.map(() => getRandomSymbol()));
-      if (soundEnabled) playSpinTick();
-    }, 70);
-
-    // Stop reels progressively: Col 0 -> Col 1 -> Col 2 -> Col 3
-    const finalGrid: string[] = Array.from({ length: 12 }, () => getRandomSymbol());
-
-    // Random X multiplier drops chance (25% chance of 1 or more X multipliers dropping!)
+    // 2. Multiplier drops chance (35% chance)
     const multipliers: MultiplierDrop[] = [];
     if (Math.random() < 0.35) {
-      const dropCount = Math.random() < 0.2 ? 2 : 1;
+      const dropCount = Math.random() < 0.25 ? 2 : 1;
       const chosenIndexes = new Set<number>();
       for (let d = 0; d < dropCount; d++) {
         const cellIdx = Math.floor(Math.random() * 12);
@@ -196,40 +348,45 @@ export const CasinoView: React.FC<{
       combinedMultiplier *= m.multiplier;
     });
 
-    // Stop reels timing
-    await new Promise((r) => setTimeout(r, 600));
-    setSpinningReels([false, true, true, true]);
-    if (soundEnabled) playReelStop();
+    // Start all 4 columns spinning with physics
+    setSpinningColumns([true, true, true, true]);
 
-    await new Promise((r) => setTimeout(r, 300));
-    setSpinningReels([false, false, true, true]);
-    if (soundEnabled) playReelStop();
+    // Play spinning ticks during motion
+    const spinInterval = setInterval(() => {
+      if (soundEnabled) playSpinTick();
+    }, 180);
 
-    await new Promise((r) => setTimeout(r, 300));
-    setSpinningReels([false, false, false, true]);
-    if (soundEnabled) playReelStop();
+    // Reel durations: staggered stops for authentic cascading physics
+    // Col 0: 1600ms, Col 1: 2000ms, Col 2: 2400ms, Col 3: 2800ms
+    const totalSpinTime = 2850;
 
-    await new Promise((r) => setTimeout(r, 300));
-    clearInterval(spinInterval);
-    setGrid(finalGrid);
-    setSpinningReels([false, false, false, false]);
-    if (soundEnabled) playReelStop();
+    setTimeout(() => {
+      clearInterval(spinInterval);
+    }, totalSpinTime);
+
+    // Wait until all reels have completed their spring bounce landing
+    await new Promise((resolve) => setTimeout(resolve, totalSpinTime + 100));
+
+    // Update state to final grid
+    setGrid(nextGrid);
+    setSpinningColumns([false, false, false, false]);
 
     if (multipliers.length > 0) {
       setActiveMultipliers(multipliers);
       setTotalMultiplier(combinedMultiplier);
+      triggerHaptic("medium");
     }
 
-    // Evaluate Wins across paylines
+    // 3. Evaluate Wins across paylines
     let baseWin = 0;
     const hitLines: number[][] = [];
     const hitCells = new Set<number>();
 
     PAYLINES.forEach((line) => {
-      const sym0 = finalGrid[line[0]];
-      const sym1 = finalGrid[line[1]];
-      const sym2 = finalGrid[line[2]];
-      const sym3 = finalGrid[line[3]];
+      const sym0 = nextGrid[line[0]];
+      const sym1 = nextGrid[line[1]];
+      const sym2 = nextGrid[line[2]];
+      const sym3 = nextGrid[line[3]];
 
       // Check 4 of a kind
       if (sym0 === sym1 && sym1 === sym2 && sym2 === sym3) {
@@ -280,9 +437,9 @@ export const CasinoView: React.FC<{
     // Win feedback
     if (finalWin > 0) {
       if (combinedMultiplier > 1) {
-        setWinMessage(`💥 МНОЖНИК ×${combinedMultiplier}! ВИГРАШ: +${finalWin.toLocaleString()} ₴!`);
+        setWinMessage(`💥 МНОЖНИК ×${combinedMultiplier}! ВИГРАШ: +${finalWin.toLocaleString()} 🪙!`);
       } else {
-        setWinMessage(`🎉 ВИГРАШ: +${finalWin.toLocaleString()} ₴!`);
+        setWinMessage(`🎉 ВИГРАШ: +${finalWin.toLocaleString()} 🪙!`);
       }
 
       if (finalWin >= bet * 10) {
@@ -291,7 +448,7 @@ export const CasinoView: React.FC<{
         if (soundEnabled) playJackpotFanfare();
         try {
           confetti({
-            particleCount: 100,
+            particleCount: 120,
             spread: 90,
             origin: { y: 0.6 },
             colors: ["#ffd700", "#ff0000", "#00ffcc", "#ffffff"],
@@ -301,7 +458,7 @@ export const CasinoView: React.FC<{
         triggerHaptic("success");
         if (soundEnabled) playWinBigSound();
         try {
-          confetti({ particleCount: 40, spread: 60, origin: { y: 0.6 } });
+          confetti({ particleCount: 50, spread: 60, origin: { y: 0.6 } });
         } catch {}
       } else {
         triggerHaptic("medium");
@@ -325,7 +482,7 @@ export const CasinoView: React.FC<{
         }
         setTimeout(() => {
           if (autoSpinRef.current) spinReels();
-        }, 800);
+        }, 900);
         return next;
       });
     }
@@ -343,6 +500,31 @@ export const CasinoView: React.FC<{
     triggerHaptic("light");
     setAutoSpinActive(false);
     setAutoSpinCount(0);
+  };
+
+  // Helper to extract winning row indexes for a column
+  const getColWinningRows = (colIdx: number) => {
+    const rows: number[] = [];
+    [0, 1, 2].forEach((r) => {
+      const cellIdx = r * 4 + colIdx;
+      if (winningCells.includes(cellIdx)) {
+        rows.push(r);
+      }
+    });
+    return rows;
+  };
+
+  // Helper to extract multiplier drops for a column
+  const getColMultiplierDrops = (colIdx: number) => {
+    const drops: { row: number; multiplier: number }[] = [];
+    [0, 1, 2].forEach((r) => {
+      const cellIdx = r * 4 + colIdx;
+      const found = activeMultipliers.find((m) => m.index === cellIdx);
+      if (found) {
+        drops.push({ row: r, multiplier: found.multiplier });
+      }
+    });
+    return drops;
   };
 
   return (
@@ -363,7 +545,7 @@ export const CasinoView: React.FC<{
               </span>
             </div>
             <p className="text-[11px] text-amber-200/90 font-medium">
-              3×4 Ретро-автомат зі випадковими іксами множення 💥
+              3×4 Ретро-автомат з фізикою барабанів та іксами 💥
             </p>
           </div>
         </div>
@@ -409,7 +591,7 @@ export const CasinoView: React.FC<{
         )}
       </div>
 
-      {/* 🎰 THE 3x4 SLOT MACHINE CABINET */}
+      {/* 🎰 THE 3x4 SLOT MACHINE CABINET WITH PHYSICAL REEL COLUMNS */}
       <div className="bg-gradient-to-b from-[#3a0d0d] via-[#250808] to-[#140303] rounded-3xl p-4 sm:p-5 border-4 border-yellow-500/80 shadow-[0_0_40px_rgba(234,179,8,0.3)] relative">
         {/* Top Cabinet Marquee Lights */}
         <div className="flex justify-between items-center mb-3 px-2">
@@ -418,8 +600,10 @@ export const CasinoView: React.FC<{
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-400 animate-pulse" />
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
           </div>
-          <div className="text-xs font-['Fredoka'] font-black tracking-widest text-yellow-300 uppercase drop-shadow">
-            ★ 4 КОЛОНКИ · 3 РЯДИ ★
+          <div className="text-xs font-['Fredoka'] font-black tracking-widest text-yellow-300 uppercase drop-shadow flex items-center gap-1.5">
+            <Crown className="w-3.5 h-3.5 text-yellow-400" />
+            4 БАРАБАНИ · 3 РЯДИ
+            <Crown className="w-3.5 h-3.5 text-yellow-400" />
           </div>
           <div className="flex gap-1.5">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
@@ -428,58 +612,36 @@ export const CasinoView: React.FC<{
           </div>
         </div>
 
-        {/* 3x4 Slot Reels Display (2 rows of 4 + 1 row of 4 below = 12 cells) */}
-        <div className="grid grid-cols-4 gap-2 bg-[#0a0202] p-3 rounded-2xl border-2 border-yellow-600/60 shadow-inner relative overflow-hidden">
-          {/* 4 Column Reels */}
-          {grid.map((symbol, idx) => {
-            const isWinningCell = winningCells.includes(idx);
-            const colIndex = idx % 4;
-            const isColSpinning = spinningReels[colIndex];
-            const multiplierDrop = activeMultipliers.find((m) => m.index === idx);
+        {/* 4 Physical Reel Columns */}
+        <div className="grid grid-cols-4 gap-2 bg-[#0a0202] p-3 rounded-2xl border-2 border-yellow-600/60 shadow-inner relative">
+          {[0, 1, 2, 3].map((colIdx) => {
+            const current3 = [grid[colIdx], grid[colIdx + 4], grid[colIdx + 8]];
+            const target3 = [targetGrid[colIdx], targetGrid[colIdx + 4], targetGrid[colIdx + 8]];
+            const colDuration = 1600 + colIdx * 400; // Staggered: 1.6s, 2.0s, 2.4s, 2.8s
 
             return (
-              <motion.div
-                key={idx}
-                animate={
-                  isWinningCell
-                    ? { scale: [1, 1.1, 1], rotate: [0, -3, 3, 0] }
-                    : isColSpinning
-                    ? { y: [-5, 5, -5] }
-                    : {}
-                }
-                transition={{
-                  repeat: isWinningCell || isColSpinning ? Infinity : 0,
-                  duration: isWinningCell ? 0.6 : 0.15,
+              <ReelColumn
+                key={colIdx}
+                colIndex={colIdx}
+                currentSymbols={current3}
+                isSpinning={spinningColumns[colIdx]}
+                targetSymbols={target3}
+                winningRowIndexes={getColWinningRows(colIdx)}
+                multiplierDrops={getColMultiplierDrops(colIdx)}
+                duration={colDuration}
+                onStop={() => {
+                  if (soundEnabled) playReelStop(colIdx);
+                  triggerHaptic("light");
                 }}
-                className={`relative aspect-square rounded-2xl flex flex-col items-center justify-center text-3xl sm:text-4xl shadow-md border-2 transition-all ${
-                  isWinningCell
-                    ? "bg-gradient-to-b from-yellow-300 to-amber-500 border-yellow-100 shadow-[0_0_20px_rgba(250,204,21,0.8)] z-10"
-                    : "bg-gradient-to-b from-[#2a0e0e] to-[#170505] border-yellow-900/60"
-                }`}
-              >
-                <span className={`select-none filter drop-shadow ${isColSpinning ? "blur-xs opacity-70" : ""}`}>
-                  {symbol}
-                </span>
-
-                {/* Multiplier Drop Badge on Cell */}
-                {multiplierDrop && (
-                  <motion.div
-                    initial={{ scale: 0, rotate: -20 }}
-                    animate={{ scale: 1, rotate: 0 }}
-                    className="absolute -top-2 -right-2 bg-gradient-to-r from-red-600 to-amber-500 text-yellow-100 font-['Fredoka'] font-black text-[11px] px-1.5 py-0.5 rounded-lg border border-yellow-200 shadow-lg animate-bounce"
-                  >
-                    ×{multiplierDrop.multiplier}
-                  </motion.div>
-                )}
-              </motion.div>
+              />
             );
           })}
         </div>
 
         {/* Win lines indicator */}
         {winningLines.length > 0 && (
-          <div className="mt-2 text-center text-xs font-['Fredoka'] font-bold text-yellow-300 animate-pulse">
-            ✨ Зіграло ліній: {winningLines.length} | Виграш: {lastWin.toLocaleString()} ₴
+          <div className="mt-3 text-center text-xs font-['Fredoka'] font-bold text-yellow-300 animate-pulse">
+            ✨ Зіграло ліній: {winningLines.length} | Виграш: {lastWin.toLocaleString()} 🪙
           </div>
         )}
       </div>
@@ -491,7 +653,7 @@ export const CasinoView: React.FC<{
             Розмір ставки
           </span>
           <span className="text-xs text-emerald-300 font-semibold">
-            Баланс: <b>{balance.toLocaleString()} ₴</b>
+            Баланс: <b>{balance.toLocaleString()} 🪙</b>
           </span>
         </div>
 
@@ -509,7 +671,7 @@ export const CasinoView: React.FC<{
                   : "bg-[#2c1010] text-amber-200 border-yellow-900/60 hover:bg-[#3d1818]"
               }`}
             >
-              {amt >= 1000 ? `${amt / 1000}k` : amt} ₴
+              {amt >= 1000 ? `${amt / 1000}k` : amt} 🪙
             </button>
           ))}
         </div>
@@ -532,7 +694,7 @@ export const CasinoView: React.FC<{
             disabled={isSpinning || balance <= 0}
             className="px-3 py-2 bg-red-800/40 hover:bg-red-800/60 text-yellow-300 text-xs font-bold rounded-xl border border-yellow-500/40 transition-all cursor-pointer"
           >
-            Макс ({Math.min(balance, 100000).toLocaleString()} ₴)
+            Макс ({Math.min(balance, 100000).toLocaleString()} 🪙)
           </button>
         </div>
 
@@ -560,7 +722,7 @@ export const CasinoView: React.FC<{
                 }`}
               >
                 <Sparkles className="w-5 h-5 text-amber-950" />
-                КРУТИТИ ({bet.toLocaleString()} ₴)
+                КРУТИТИ ({bet.toLocaleString()} 🪙)
               </button>
 
               <button
