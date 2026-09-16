@@ -263,25 +263,122 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     wheat: Number(rawPrices.wheat_local ?? rawPrices.wheat) || 45,
   };
 
-  // 6. Bank A-11 state
-  const rawBank = state?.bank || rawEcon.bank || {};
+  // 6. Bank A-11 & Bot Deposits Sync
+  const rawBank = state?.bank || rawEcon.bank || rawFarm.bank || {};
   let localBank = { deposit: 0, loan: 0, safe_balance: 0, bonds: 0 };
   let localDelta = 0;
+  let localDepositsList: any[] = [];
+  let localOwnedBusinesses: Record<string, number> = {};
+
   if (typeof window !== "undefined") {
     try {
-      const saved = localStorage.getItem("farmer_bank_a11");
-      if (saved) localBank = JSON.parse(saved);
+      const savedBank = localStorage.getItem("farmer_bank_a11");
+      if (savedBank) localBank = JSON.parse(savedBank);
       localDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+      const savedDeps = localStorage.getItem("farmer_active_deposits");
+      if (savedDeps) localDepositsList = JSON.parse(savedDeps);
+      const savedBiz = localStorage.getItem("farmer_owned_businesses");
+      if (savedBiz) localOwnedBusinesses = JSON.parse(savedBiz);
     } catch {}
   }
-  const bankDeposit = Number(rawBank.deposit ?? rawEcon.deposit ?? localBank.deposit) || 0;
-  const bankLoan = Number(rawBank.loan ?? rawEcon.loan ?? localBank.loan) || 0;
-  const bankSafe = Number(rawBank.safe_balance ?? rawBank.safe ?? rawEcon.safe ?? localBank.safe_balance) || 0;
+
+  // Parse total deposit from all possible Python bot SQLite fields
+  const botDepositTotal =
+    Number(
+      rawBank.deposit ??
+        state.deposit ??
+        rawFarm.deposit ??
+        rawEcon.deposit ??
+        state.bank_deposit ??
+        rawFarm.bank_deposit ??
+        rawEcon.bank_deposit ??
+        state.user_deposit
+    ) || 0;
+
+  const bankDeposit = Math.max(botDepositTotal, localBank.deposit);
+
+  const bankLoan =
+    Number(
+      rawBank.loan ??
+        state.loan ??
+        rawFarm.loan ??
+        rawEcon.loan ??
+        state.bank_loan ??
+        localBank.loan
+    ) || 0;
+
+  const bankSafe =
+    Number(
+      rawBank.safe_balance ??
+        rawBank.safe ??
+        state.safe ??
+        rawFarm.safe ??
+        rawEcon.safe ??
+        state.safe_balance ??
+        localBank.safe_balance
+    ) || 0;
+
   const bankBonds = Number(rawBank.bonds ?? rawEcon.bonds ?? localBank.bonds) || 0;
   const loanLimit = levelNum * 20000 + 10000;
 
-  const baseBalance = typeof rawEcon.balance === "number" ? rawEcon.balance : 0;
+  // Parse active deposits list from bot response (if any) or merge with local records
+  const rawDepositsArr =
+    state.deposits ||
+    rawBank.deposits ||
+    rawFarm.deposits ||
+    state.active_deposits ||
+    state.all_deposits ||
+    state.group_deposits ||
+    [];
+
+  const activeDeposits: any[] = [];
+  if (Array.isArray(rawDepositsArr) && rawDepositsArr.length > 0) {
+    rawDepositsArr.forEach((d: any, idx: number) => {
+      activeDeposits.push({
+        id: String(d.id || `bot-dep-${idx}`),
+        user_id: d.user_id || d.userId,
+        user_name: d.user_name || d.name || d.username || "Гравець бота",
+        amount: Number(d.amount || d.deposit || d.sum) || 0,
+        rate: Number(d.rate || d.percent) || 8,
+        created_at: d.created_at || d.date || "Створено в боті",
+        profit: Number(d.profit || d.earned) || 0,
+      });
+    });
+  }
+
+  // Add local / recent deposits if not duplicate
+  localDepositsList.forEach((ld) => {
+    if (!activeDeposits.some((ad) => ad.id === ld.id)) {
+      activeDeposits.push(ld);
+    }
+  });
+
+  // If there is a personal deposit but list is empty, create a summary item
+  if (activeDeposits.length === 0 && bankDeposit > 0) {
+    activeDeposits.push({
+      id: "personal-dep-main",
+      user_name: state.name || "Мій основний вклад",
+      amount: bankDeposit,
+      rate: 8,
+      created_at: "Активний (синхронізовано з ботом)",
+      profit: Math.round(bankDeposit * 0.08),
+    });
+  }
+
+  const baseBalance = typeof rawEcon.balance === "number" ? rawEcon.balance : (Number(state.balance) || 0);
   const finalBalance = Math.max(0, baseBalance + localDelta);
+
+  // Parse owned businesses from Python SQLite / state
+  const rawBiz = state.business?.businesses || state.businesses || rawFarm.businesses || {};
+  const bizOwned: Record<string, number> = {
+    kiosk: Number(rawBiz.kiosk ?? state.business?.kiosk ?? rawFarm.kiosk ?? localOwnedBusinesses.kiosk) || 0,
+    cafe: Number(rawBiz.cafe ?? state.business?.cafe ?? rawFarm.cafe ?? localOwnedBusinesses.cafe) || 0,
+    shop: Number(rawBiz.shop ?? state.business?.shop ?? rawFarm.shop ?? localOwnedBusinesses.shop) || 0,
+    restaurant: Number(rawBiz.restaurant ?? state.business?.restaurant ?? localOwnedBusinesses.restaurant) || 0,
+    factory: Number(rawBiz.factory ?? state.business?.factory ?? localOwnedBusinesses.factory) || 0,
+    corporation: Number(rawBiz.corporation ?? state.business?.corporation ?? localOwnedBusinesses.corporation) || 0,
+    monopoly: Number(rawBiz.monopoly ?? state.business?.monopoly ?? localOwnedBusinesses.monopoly) || 0,
+  };
 
   return {
     tag: state.tag || "Агроном 🌾",
@@ -343,6 +440,7 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
         loan_limit: loanLimit,
         safe_balance: bankSafe,
         bonds: bankBonds,
+        active_deposits: activeDeposits,
       },
       storage: {
         used:
@@ -384,10 +482,11 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       level_name: rawLevelName,
       contracts,
       upgrades: {
-        sprinkler: Number(state.business?.kiosk) || 0,
-        auto_feeder: Number(state.business?.cafe) || 0,
-        tractor: Number(state.business?.shop) || 0,
+        sprinkler: bizOwned.kiosk || 0,
+        auto_feeder: bizOwned.cafe || 0,
+        tractor: bizOwned.shop || 0,
       },
+      businesses: bizOwned,
     },
   };
 }
@@ -543,8 +642,52 @@ export async function executeAction(
   } else if (actionName === "new_contract") {
     pythonAction = "new_contract";
   } else if (actionName === "buy_business" || actionName === "business_buy") {
+    const bizPrices: Record<string, { price: number; name: string }> = {
+      kiosk: { price: 30000, name: "Кіоск" },
+      cafe: { price: 200000, name: "Кафе" },
+      shop: { price: 1200000, name: "Магазин" },
+      restaurant: { price: 7000000, name: "Ресторан" },
+      factory: { price: 40000000, name: "Завод" },
+      corporation: { price: 250000000, name: "Корпорація" },
+      monopoly: { price: 1500000000, name: "Монополія" },
+    };
+    const rawBizKey = String(params.item || params.business || params.type || "kiosk");
+    const bizInfo = bizPrices[rawBizKey] || { price: 50000, name: rawBizKey };
+
     pythonAction = "buy_business";
-    pythonPayload.item = String(params.item || params.business || "");
+    pythonPayload.item = rawBizKey;
+    pythonPayload.business = rawBizKey;
+    pythonPayload.type = rawBizKey;
+    pythonPayload.name = rawBizKey;
+
+    if (typeof window !== "undefined") {
+      try {
+        const curDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+        localStorage.setItem("farmer_balance_delta", String(curDelta - bizInfo.price));
+        const savedBiz = JSON.parse(localStorage.getItem("farmer_owned_businesses") || "{}");
+        savedBiz[rawBizKey] = (Number(savedBiz[rawBizKey]) || 0) + 1;
+        localStorage.setItem("farmer_owned_businesses", JSON.stringify(savedBiz));
+      } catch {}
+    }
+
+    try {
+      const baseUrl = getBaseUrl();
+      fetch(`${baseUrl}/api/action`, {
+        method: "POST",
+        headers: getHeaders(),
+        body: JSON.stringify({
+          action: "buy_business",
+          item: rawBizKey,
+          business: rawBizKey,
+          type: rawBizKey,
+        }),
+      }).catch(() => {});
+    } catch {}
+
+    return {
+      ok: true,
+      message: `🏢 Придбано підприємство «${bizInfo.name}»! Пасивний дохід зріс.`,
+    };
   } else if (actionName === "casino" || actionName === "casino_spin" || actionName === "gamble") {
     const bet = Number(params.bet) || 0;
     const win = Number(params.win) || 0;
@@ -555,19 +698,29 @@ export async function executeAction(
         localStorage.setItem("farmer_balance_delta", String(curDelta + net));
       } catch {}
     }
-    // Attempt sending to backend in background if supported, but never let it throw
+
+    // Sync directly to the Python / Express backend
     try {
       const baseUrl = getBaseUrl();
       fetch(`${baseUrl}/api/action`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ action: "casino", bet, win }),
+        body: JSON.stringify({
+          action: "casino",
+          bet,
+          win,
+          delta: net,
+          amount: net,
+        }),
       }).catch(() => {});
     } catch {}
 
     return {
       ok: true,
-      message: win > 0 ? `🎰 Виграш: +${win.toLocaleString()} 🪙!` : `🎰 Спін завершено (ставка ${bet.toLocaleString()} 🪙)`,
+      message:
+        win > 0
+          ? `🎰 Виграш: +${win.toLocaleString()} 🪙 (чистий прибуток: +${net.toLocaleString()} 🪙)!`
+          : `🎰 Спін завершено (ставка ${bet.toLocaleString()} 🪙)`,
     };
   } else if (actionName === "bank_deposit" || actionName === "deposit") {
     const amt = Number(params.amount) || 0;
@@ -578,6 +731,18 @@ export async function executeAction(
         const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
         saved.deposit = (Number(saved.deposit) || 0) + amt;
         localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+
+        // Add to active deposits list
+        const savedDeps = JSON.parse(localStorage.getItem("farmer_active_deposits") || "[]");
+        savedDeps.unshift({
+          id: `dep-${Date.now()}`,
+          user_name: getTelegramUser()?.first_name || "Мій вклад",
+          amount: amt,
+          rate: 8,
+          created_at: new Date().toLocaleTimeString("uk-UA", { hour: "2-digit", minute: "2-digit" }),
+          profit: Math.round(amt * 0.08),
+        });
+        localStorage.setItem("farmer_active_deposits", JSON.stringify(savedDeps.slice(0, 20)));
       } catch {}
     }
     try {
@@ -585,7 +750,7 @@ export async function executeAction(
       fetch(`${baseUrl}/api/action`, {
         method: "POST",
         headers: getHeaders(),
-        body: JSON.stringify({ action: "bank_deposit", amount: amt }),
+        body: JSON.stringify({ action: "bank_deposit", amount: amt, deposit: amt }),
       }).catch(() => {});
     } catch {}
     return {
@@ -758,15 +923,47 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
   const data = await res.json();
   if (data && Array.isArray(data.leaderboard)) {
     const currentId = Number(getSavedTelegramId()) || (getTelegramUser() ? getTelegramUser()?.id : 0);
-    return {
-      leaderboard: data.leaderboard.map((item: any, idx: number) => ({
+    let localDelta = 0;
+    if (typeof window !== "undefined") {
+      localDelta = Number(localStorage.getItem("farmer_balance_delta") || 0);
+    }
+
+    const items = data.leaderboard.map((item: any) => {
+      const isSelf = currentId > 0 && item.user_id === currentId;
+      const actualBalance = isSelf ? Math.max(0, (Number(item.balance) || 0) + localDelta) : (Number(item.balance) || 0);
+      return {
         user_id: item.user_id,
         name: item.name || `Гравець ${item.user_id}`,
-        balance: Number(item.balance) || 0,
-        rank: idx + 1,
+        balance: actualBalance,
+        rank: item.rank || 1,
         tag: item.level_name || (item.level ? `Рівень ${item.level}` : undefined),
-        isSelf: currentId > 0 && item.user_id === currentId,
-      })),
+        isSelf,
+      };
+    });
+
+    // If player not present in array, add self
+    if (currentId > 0 && !items.some((i: any) => i.isSelf)) {
+      const tgUser = getTelegramUser();
+      const savedName = getSavedTelegramName() || (tgUser ? `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() : "Я (Фермер)");
+      const currentSavedDelta = typeof window !== "undefined" ? Number(localStorage.getItem("farmer_balance_delta") || 0) : 0;
+      items.push({
+        user_id: currentId,
+        name: `${savedName} (Ви)`,
+        balance: Math.max(0, 500 + currentSavedDelta),
+        rank: items.length + 1,
+        tag: "Фермер 🚜",
+        isSelf: true,
+      });
+    }
+
+    // Dynamic sorting so player's rank reflects true wealth
+    items.sort((a: any, b: any) => b.balance - a.balance);
+    items.forEach((item: any, idx: number) => {
+      item.rank = idx + 1;
+    });
+
+    return {
+      leaderboard: items,
     };
   }
 
