@@ -14,6 +14,7 @@ import { MarketView } from "./components/market/MarketView";
 import { ShopView } from "./components/shop/ShopView";
 import { BusinessView } from "./components/business/BusinessView";
 import { CasinoView } from "./components/casino/CasinoView";
+import { BankView } from "./components/bank/BankView";
 import { LeaderboardView } from "./components/leaderboard/LeaderboardView";
 import { ProfileView } from "./components/profile/ProfileView";
 import { motion, AnimatePresence } from "motion/react";
@@ -171,6 +172,9 @@ function FarmGame() {
               )}
               {activeTab === "shop" && (
                 <ShopView onAction={handleAction} isLoading={actionMutation.isPending} />
+              )}
+              {activeTab === "bank" && (
+                <BankView onAction={handleAction} isLoading={actionMutation.isPending} />
               )}
               {activeTab === "casino" && (
                 <CasinoView onAction={handleAction} isLoading={actionMutation.isPending} />

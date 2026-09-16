@@ -144,19 +144,47 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
 
   const now = Date.now();
 
-  // 1. Potato calculation from Python SQLite
-  let potatoPlantedAt = 0;
-  if (rawFarm.planted_at) {
-    const pDate = new Date(rawFarm.planted_at).getTime();
-    if (!isNaN(pDate)) potatoPlantedAt = pDate;
+  // 1. Potato calculation from Python SQLite & Local Storage sync
+  let localPotatoPlot: { planted: number; planted_at: number } | null = null;
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("farmer_potato_plot");
+      if (saved) localPotatoPlot = JSON.parse(saved);
+    } catch {}
   }
-  const potatoPlantedCount = Number(rawFarm.planted_count) || 0;
-  const potatoDuration = 7200; // 2 hours
+
+  let potatoPlantedAt = 0;
+  const rawPlantedAt = rawFarm.planted_at || rawFarm.potato_planted_at || rawFarm.planted_time;
+  if (rawPlantedAt) {
+    const pDate = new Date(rawPlantedAt).getTime();
+    if (!isNaN(pDate)) {
+      potatoPlantedAt = pDate;
+    } else if (typeof rawPlantedAt === "number") {
+      potatoPlantedAt = rawPlantedAt > 1e11 ? rawPlantedAt : rawPlantedAt * 1000;
+    }
+  } else if (localPotatoPlot?.planted_at) {
+    potatoPlantedAt = localPotatoPlot.planted_at;
+  }
+
+  let potatoPlantedCount =
+    Number(
+      rawFarm.planted_count ??
+        rawFarm.planted_potato ??
+        rawFarm.potato_planted ??
+        rawFarm.planted ??
+        rawFarm.potato_count_planted
+    ) || 0;
+
+  if (potatoPlantedCount === 0 && localPotatoPlot && localPotatoPlot.planted > 0 && potatoPlantedAt > 0) {
+    potatoPlantedCount = localPotatoPlot.planted;
+  }
+
+  const potatoDuration = Number(rawFarm.potato_duration) || 7200; // 2 hours in seconds
   let potatoProgress = 0;
   let potatoReady = false;
   let potatoSecondsLeft = 0;
   if (potatoPlantedCount > 0 && potatoPlantedAt > 0) {
-    const elapsed = (now - potatoPlantedAt) / 1000;
+    const elapsed = Math.max(0, (now - potatoPlantedAt) / 1000);
     potatoProgress = Math.min(100, Math.round((elapsed / potatoDuration) * 100));
     potatoReady = elapsed >= potatoDuration;
     potatoSecondsLeft = Math.max(0, Math.round(potatoDuration - elapsed));
@@ -168,6 +196,9 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
   if (rawWheat.planted_at) {
     const wDate = new Date(rawWheat.planted_at).getTime();
     if (!isNaN(wDate)) wheatPlantedAt = wDate;
+    else if (typeof rawWheat.planted_at === "number") {
+      wheatPlantedAt = rawWheat.planted_at > 1e11 ? rawWheat.planted_at : rawWheat.planted_at * 1000;
+    }
   }
   const wheatPlantedCount = Number(rawWheat.planted_count) || 0;
   const wheatDuration = 14400; // 4 hours
@@ -181,7 +212,7 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     let ready = false;
     let stage = 0;
     if (isPlanted) {
-      const elapsed = (now - wheatPlantedAt) / 1000;
+      const elapsed = Math.max(0, (now - wheatPlantedAt) / 1000);
       progress = Math.min(100, Math.round((elapsed / wheatDuration) * 100));
       ready = progress >= 100;
       stage = 1;
@@ -232,6 +263,21 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     wheat: Number(rawPrices.wheat_local ?? rawPrices.wheat) || 45,
   };
 
+  // 6. Bank A-11 state
+  const rawBank = state?.bank || rawEcon.bank || {};
+  let localBank = { deposit: 0, loan: 0, safe_balance: 0, bonds: 0 };
+  if (typeof window !== "undefined") {
+    try {
+      const saved = localStorage.getItem("farmer_bank_a11");
+      if (saved) localBank = JSON.parse(saved);
+    } catch {}
+  }
+  const bankDeposit = Number(rawBank.deposit ?? rawEcon.deposit ?? localBank.deposit) || 0;
+  const bankLoan = Number(rawBank.loan ?? rawEcon.loan ?? localBank.loan) || 0;
+  const bankSafe = Number(rawBank.safe_balance ?? rawBank.safe ?? rawEcon.safe ?? localBank.safe_balance) || 0;
+  const bankBonds = Number(rawBank.bonds ?? rawEcon.bonds ?? localBank.bonds) || 0;
+  const loanLimit = levelNum * 20000 + 10000;
+
   return {
     tag: state.tag || "Агроном 🌾",
     level: {
@@ -244,7 +290,8 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       potato: {
         planted_at: potatoPlantedAt,
         growth_duration: potatoDuration,
-        count: Number(rawFarm.potato) || 0,
+        count: Number(rawFarm.potato) || 0, // harvested in storage
+        planted: potatoPlantedCount, // planted bushes in ground
         max_count: 5000,
         ready: potatoReady,
         growth_progress: potatoProgress,
@@ -284,6 +331,14 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     economy: {
       balance: typeof rawEcon.balance === "number" ? rawEcon.balance : 0,
       gems: 0,
+      bank: {
+        deposit: bankDeposit,
+        deposit_rate: 8, // 8% daily
+        loan: bankLoan,
+        loan_limit: loanLimit,
+        safe_balance: bankSafe,
+        bonds: bankBonds,
+      },
       storage: {
         used:
           (Number(rawFarm.eggs) || 0) +
@@ -402,12 +457,28 @@ export async function executeAction(
     actionName === "harvest_potato" ||
     actionName === "collect_eggs" ||
     actionName === "collect_milk" ||
-    actionName === "collect_ostrich"
+    actionName === "collect_ostrich" ||
+    actionName === "collect_all" ||
+    actionName === "collect_farm"
   ) {
     pythonAction = "collect_farm";
+    if (typeof window !== "undefined") {
+      // Clear potato plot if harvested
+      localStorage.removeItem("farmer_potato_plot");
+    }
   } else if (actionName === "plant_potato") {
     pythonAction = "plant_potato";
-    pythonPayload.count = Number(params.count) || 1;
+    const count = Number(params.count) || 1;
+    pythonPayload.count = count;
+    if (typeof window !== "undefined") {
+      localStorage.setItem(
+        "farmer_potato_plot",
+        JSON.stringify({
+          planted: count,
+          planted_at: Date.now(),
+        })
+      );
+    }
   } else if (actionName === "slaughter") {
     pythonAction = "slaughter";
     pythonPayload.count = Number(params.count) || 1;
@@ -473,6 +544,72 @@ export async function executeAction(
     pythonAction = "casino";
     pythonPayload.bet = Number(params.bet) || 0;
     pythonPayload.win = Number(params.win) || 0;
+  } else if (actionName === "bank_deposit" || actionName === "deposit") {
+    pythonAction = "bank_deposit";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.deposit = (Number(saved.deposit) || 0) + amt;
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
+  } else if (actionName === "bank_withdraw" || actionName === "withdraw") {
+    pythonAction = "bank_withdraw";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.deposit = Math.max(0, (Number(saved.deposit) || 0) - amt);
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
+  } else if (actionName === "take_loan" || actionName === "bank_loan") {
+    pythonAction = "take_loan";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.loan = (Number(saved.loan) || 0) + amt;
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
+  } else if (actionName === "repay_loan" || actionName === "pay_loan") {
+    pythonAction = "repay_loan";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.loan = Math.max(0, (Number(saved.loan) || 0) - amt);
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
+  } else if (actionName === "safe_deposit") {
+    pythonAction = "safe_deposit";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.safe_balance = (Number(saved.safe_balance) || 0) + amt;
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
+  } else if (actionName === "safe_withdraw") {
+    pythonAction = "safe_withdraw";
+    const amt = Number(params.amount) || 0;
+    pythonPayload.amount = amt;
+    if (typeof window !== "undefined") {
+      try {
+        const saved = JSON.parse(localStorage.getItem("farmer_bank_a11") || "{}");
+        saved.safe_balance = Math.max(0, (Number(saved.safe_balance) || 0) - amt);
+        localStorage.setItem("farmer_bank_a11", JSON.stringify(saved));
+      } catch {}
+    }
   }
 
   const baseUrl = getBaseUrl();

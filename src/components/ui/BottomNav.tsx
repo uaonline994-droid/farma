@@ -2,7 +2,7 @@ import React from "react";
 import { useGameStore } from "../../store/gameStore";
 import { TabType } from "../../types";
 import { triggerHaptic } from "../../services/telegram";
-import { Tractor, Wheat, Store, ShoppingBag, Briefcase, Trophy, User, Dices } from "lucide-react";
+import { Tractor, Wheat, Store, ShoppingBag, Landmark, Briefcase, Trophy, User, Dices } from "lucide-react";
 import { motion } from "motion/react";
 
 interface NavTabItem {
@@ -42,6 +42,11 @@ export const BottomNav: React.FC = () => {
       id: "shop",
       label: "Крамниця",
       icon: <ShoppingBag className="w-5 h-5" />,
+    },
+    {
+      id: "bank",
+      label: "Банк",
+      icon: <Landmark className="w-5 h-5 text-cyan-300" />,
     },
     {
       id: "casino",

@@ -10,7 +10,8 @@ export interface TelegramUser {
 export interface PotatoPlotState {
   planted_at: number;
   growth_duration: number;
-  count: number;
+  count: number; // Harvested inventory
+  planted?: number; // Currently planted bushes in the ground
   max_count: number;
   ready?: boolean;
   growth_progress?: number;
@@ -86,9 +87,20 @@ export interface StorageState {
   max: number;
 }
 
+export interface BankState {
+  deposit: number;
+  deposit_rate: number;
+  loan: number;
+  loan_limit: number;
+  safe_balance: number;
+  last_interest_time?: number;
+  bonds?: number;
+}
+
 export interface EconomyState {
   balance: number;
   gems: number;
+  bank?: BankState;
   storage: StorageState;
   prices: EconomyPrices;
   feed_stock: FeedStock;
@@ -190,7 +202,7 @@ export interface ActionResponse {
   state?: GameState;
 }
 
-export type TabType = "farm" | "wheat" | "market" | "shop" | "business" | "casino" | "leaderboard" | "profile";
+export type TabType = "farm" | "wheat" | "market" | "shop" | "bank" | "business" | "casino" | "leaderboard" | "profile";
 
 export interface ToastItem {
   id: string;

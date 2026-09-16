@@ -16,6 +16,7 @@ export function createInitialLocalState(): GameState {
         planted_at: 0,
         growth_duration: 30,
         count: 0,
+        planted: 0,
         max_count: 50,
       },
       chickens: {
@@ -214,16 +215,18 @@ export function executeLocalAction(action: string, params: Record<string, any> =
 
   switch (action) {
     case "plant_potato": {
-      if (state.farm.potato.planted_at > 0) {
+      if (state.farm.potato.planted_at > 0 && (state.farm.potato.planted ?? 0) > 0) {
         return { ok: false, message: "Картопля вже росте на полі!" };
       }
-      if (state.economy.seed_stock.potato <= 0) {
-        return { ok: false, message: "Немає насіння картоплі! Купіть у магазині." };
+      const count = Math.max(1, Math.min(Number(params.count) || 1, state.economy.seed_stock.potato));
+      if (state.economy.seed_stock.potato < count || count <= 0) {
+        return { ok: false, message: "Немає достатньо насіння картоплі! Купіть у магазині." };
       }
-      state.economy.seed_stock.potato -= 1;
+      state.economy.seed_stock.potato -= count;
       state.farm.potato.planted_at = now;
+      state.farm.potato.planted = count;
       saveLocalState(state);
-      return { ok: true, message: "🥔 Картоплю посаджено!" };
+      return { ok: true, message: `🥔 Посаджено ${count} кущів картоплі!` };
     }
 
     case "harvest_potato": {
@@ -234,8 +237,10 @@ export function executeLocalAction(action: string, params: Record<string, any> =
       if (elapsed < state.farm.potato.growth_duration) {
         return { ok: false, message: "Картопля ще дозріває!" };
       }
-      const harvested = Math.floor(Math.random() * 6) + 6;
+      const planted = state.farm.potato.planted || 1;
+      const harvested = planted * 3;
       state.farm.potato.planted_at = 0;
+      state.farm.potato.planted = 0;
       state.farm.potato.count += harvested;
       state.economy.storage.used += harvested;
       addXP(state, 20);
@@ -423,6 +428,83 @@ export function executeLocalAction(action: string, params: Record<string, any> =
       addXP(state, contract.reward_xp);
       saveLocalState(state);
       return { ok: true, message: `📜 Контракт виконано! +${contract.reward_coins} 🪙, +${contract.reward_xp} XP` };
+    }
+
+    case "bank_deposit": {
+      const amount = Number(params.amount) || 0;
+      if (amount <= 0 || state.economy.balance < amount) {
+        return { ok: false, message: "Недостатньо коштів для внесення на депозит." };
+      }
+      if (!state.economy.bank) {
+        state.economy.bank = { deposit: 0, deposit_rate: 8, loan: 0, loan_limit: 50000, safe_balance: 0, bonds: 0 };
+      }
+      state.economy.balance -= amount;
+      state.economy.bank.deposit += amount;
+      saveLocalState(state);
+      return { ok: true, message: `🏦 Внесено ${amount.toLocaleString()} ₴ на депозит під 8%!` };
+    }
+
+    case "bank_withdraw": {
+      const amount = Number(params.amount) || 0;
+      if (!state.economy.bank || amount <= 0 || state.economy.bank.deposit < amount) {
+        return { ok: false, message: "Недостатньо коштів на депозиті." };
+      }
+      state.economy.bank.deposit -= amount;
+      state.economy.balance += amount;
+      saveLocalState(state);
+      return { ok: true, message: `🏦 Знято ${amount.toLocaleString()} ₴ з депозиту на баланс!` };
+    }
+
+    case "take_loan": {
+      const amount = Number(params.amount) || 0;
+      if (!state.economy.bank) {
+        state.economy.bank = { deposit: 0, deposit_rate: 8, loan: 0, loan_limit: 50000, safe_balance: 0, bonds: 0 };
+      }
+      const maxAvailable = Math.max(0, state.economy.bank.loan_limit - state.economy.bank.loan);
+      if (amount <= 0 || amount > maxAvailable) {
+        return { ok: false, message: "Перевищено кредитно-фінансовий ліміт Банку А-11." };
+      }
+      state.economy.bank.loan += amount;
+      state.economy.balance += amount;
+      saveLocalState(state);
+      return { ok: true, message: `💳 Отримано кредит ${amount.toLocaleString()} ₴ від Банку А-11!` };
+    }
+
+    case "repay_loan": {
+      const amount = Number(params.amount) || 0;
+      if (!state.economy.bank || amount <= 0 || state.economy.balance < amount || state.economy.bank.loan <= 0) {
+        return { ok: false, message: "Некоректна сума або недостатньо балансу." };
+      }
+      const actualRepay = Math.min(amount, state.economy.bank.loan);
+      state.economy.bank.loan -= actualRepay;
+      state.economy.balance -= actualRepay;
+      saveLocalState(state);
+      return { ok: true, message: `✅ Погашено ${actualRepay.toLocaleString()} ₴ кредиту!` };
+    }
+
+    case "safe_deposit": {
+      const amount = Number(params.amount) || 0;
+      if (amount <= 0 || state.economy.balance < amount) {
+        return { ok: false, message: "Недостатньо балансу для сейфу." };
+      }
+      if (!state.economy.bank) {
+        state.economy.bank = { deposit: 0, deposit_rate: 8, loan: 0, loan_limit: 50000, safe_balance: 0, bonds: 0 };
+      }
+      state.economy.balance -= amount;
+      state.economy.bank.safe_balance += amount;
+      saveLocalState(state);
+      return { ok: true, message: `🔒 Заховано ${amount.toLocaleString()} ₴ у сейф А-11!` };
+    }
+
+    case "safe_withdraw": {
+      const amount = Number(params.amount) || 0;
+      if (!state.economy.bank || amount <= 0 || state.economy.bank.safe_balance < amount) {
+        return { ok: false, message: "Недостатньо коштів у сейфі." };
+      }
+      state.economy.bank.safe_balance -= amount;
+      state.economy.balance += amount;
+      saveLocalState(state);
+      return { ok: true, message: `🔓 Вилучено ${amount.toLocaleString()} ₴ із сейфу на баланс!` };
     }
 
     default:

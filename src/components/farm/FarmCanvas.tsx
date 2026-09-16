@@ -1,8 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useGameStore } from "../../store/gameStore";
 import { triggerHaptic } from "../../services/telegram";
 import { RoosterSprite, HenSprite, ChickSprite, CowSprite, PigSprite, OstrichSprite, PotatoPlotSprite } from "./sprites/FarmSprites";
-import { Sparkles, Utensils, Egg, Plus, Scissors, Milk, Award, Zap, PackageOpen, ArrowRight } from "lucide-react";
+import { Sparkles, Utensils, Egg, Plus, Scissors, Milk, Award, Zap, PackageOpen, ArrowRight, Clock, Timer, CheckCircle2 } from "lucide-react";
 import confetti from "canvas-confetti";
 import { motion } from "motion/react";
 import { StorageModal } from "../ui/StorageModal";
@@ -16,15 +16,40 @@ export const FarmCanvas: React.FC<{
   const [potatoPlantInput, setPotatoPlantInput] = useState<string>("10");
   const [selectedAnimalTab, setSelectedAnimalTab] = useState<"chickens" | "pigs" | "cows" | "ostriches">("chickens");
   const [isStorageModalOpen, setIsStorageModalOpen] = useState(false);
+  const [nowTime, setNowTime] = useState<number>(Date.now());
+
+  // Real-time 1s ticker for crop countdowns
+  useEffect(() => {
+    const timer = setInterval(() => setNowTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   if (!gameState) return null;
 
   const farm = gameState.farm;
   const potato = farm.potato;
-  const potatoProgress = potato.growth_progress ?? 0;
-  const potatoReady = potato.ready ?? false;
   const potatoSeedsAvailable = gameState.economy.seed_stock.potato;
   const grainFeed = gameState.economy.feed_stock.grain;
+
+  // Potato live countdown & bushes calculation
+  const plantedBushes = (potato.planted && potato.planted > 0) ? potato.planted : (potato.count > 0 && potato.planted_at > 0 ? potato.count : 0);
+  const potatoPlantedAt = potato.planted_at || 0;
+  const potatoDuration = potato.growth_duration || 7200; // 2 hours in seconds
+  const potatoElapsed = potatoPlantedAt > 0 ? Math.max(0, (nowTime - potatoPlantedAt) / 1000) : 0;
+  const potatoSecondsLeft = plantedBushes > 0 && potatoPlantedAt > 0 ? Math.max(0, Math.round(potatoDuration - potatoElapsed)) : 0;
+  const potatoReady = plantedBushes > 0 && (potatoSecondsLeft === 0 || !!potato.ready);
+  const potatoProgress = plantedBushes > 0 ? Math.min(100, Math.round((potatoElapsed / potatoDuration) * 100)) : 0;
+
+  const formatTimer = (totalSecs: number) => {
+    if (totalSecs <= 0) return "00:00";
+    const hours = Math.floor(totalSecs / 3600);
+    const minutes = Math.floor((totalSecs % 3600) / 60);
+    const seconds = totalSecs % 60;
+    if (hours > 0) {
+      return `${hours}год ${minutes.toString().padStart(2, "0")}хв ${seconds.toString().padStart(2, "0")}с`;
+    }
+    return `${minutes.toString().padStart(2, "0")}хв ${seconds.toString().padStart(2, "0")}с`;
+  };
 
   const handleMasterCollect = async () => {
     triggerHaptic("heavy");
@@ -55,7 +80,7 @@ export const FarmCanvas: React.FC<{
             </h3>
             <p className="text-[11px] text-amber-100/90 truncate">
               {potatoReady || farm.chickens.eggs > 0 || farm.cows.milk > 0
-                ? "Є готовий врожай та продукти!"
+                ? "Є готовий врожай та свіжі продукти!"
                 : "Зібрати всі доступні яйця, молоко та картоплю"}
             </p>
           </div>
@@ -65,10 +90,60 @@ export const FarmCanvas: React.FC<{
           id="btn-master-collect"
           onClick={handleMasterCollect}
           disabled={isLoading}
-          className="px-4 py-2 bg-gradient-to-b from-yellow-300 to-amber-400 hover:from-yellow-200 hover:to-amber-300 active:scale-95 text-amber-950 font-['Fredoka'] font-bold text-xs rounded-xl shadow-md border border-yellow-100 transition-all flex items-center gap-1.5 shrink-0"
+          className="px-4 py-2 bg-gradient-to-b from-yellow-300 to-amber-400 hover:from-yellow-200 hover:to-amber-300 active:scale-95 text-amber-950 font-['Fredoka'] font-bold text-xs rounded-xl shadow-md border border-yellow-100 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
         >
           <Sparkles className="w-4 h-4 text-amber-900" />
           Зібрати все
+        </button>
+      </div>
+
+      {/* 🥚 CHICKEN EGGS MAIN SCREEN DISPLAY WIDGET */}
+      <div className="bg-gradient-to-r from-[#244b28] via-[#1c3d1f] to-[#163319] rounded-2xl p-3.5 border-2 border-amber-400/60 shadow-xl relative overflow-hidden flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="flex items-center gap-3 w-full sm:w-auto">
+          <div className="relative">
+            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 border-2 border-amber-300/80 flex items-center justify-center text-2xl shadow-inner shrink-0">
+              🥚
+            </div>
+            {farm.chickens.eggs > 0 && (
+              <span className="absolute -top-1.5 -right-1.5 bg-red-600 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full border border-yellow-300 animate-bounce">
+                +{farm.chickens.eggs}
+              </span>
+            )}
+          </div>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5">
+              <span className="font-['Fredoka'] font-bold text-base text-yellow-200">
+                Знесено яєць:
+              </span>
+              <span className="text-xl font-['Fredoka'] font-black text-amber-300">
+                {farm.chickens.eggs} шт.
+              </span>
+            </div>
+            <div className="text-[11px] text-emerald-200 flex items-center gap-2 mt-0.5 flex-wrap">
+              <span>🐔 Курей: <b>{farm.chickens.count}</b></span>
+              <span>•</span>
+              <span>🐣 Курчат: <b>{farm.chickens.chicks}</b></span>
+              <span>•</span>
+              <span>🐓 Півнів: <b>{farm.chickens.roosters}</b></span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          id="btn-quick-collect-eggs"
+          onClick={async () => {
+            triggerHaptic("success");
+            await onAction("collect_farm");
+          }}
+          disabled={isLoading || farm.chickens.eggs === 0}
+          className={`w-full sm:w-auto px-4 py-2.5 rounded-xl font-['Fredoka'] font-bold text-xs shadow-md border flex items-center justify-center gap-1.5 transition-all shrink-0 ${
+            farm.chickens.eggs > 0
+              ? "bg-gradient-to-r from-amber-400 to-yellow-400 hover:from-amber-300 hover:to-yellow-300 active:scale-95 text-amber-950 border-yellow-100 cursor-pointer animate-pulse"
+              : "bg-gray-800/60 text-gray-400 border-gray-700 cursor-not-allowed"
+          }`}
+        >
+          <Sparkles className="w-4 h-4 text-amber-900" />
+          {farm.chickens.eggs > 0 ? `Зібрати яйця (+${farm.chickens.eggs})` : "Гнізда пусті"}
         </button>
       </div>
 
@@ -93,29 +168,30 @@ export const FarmCanvas: React.FC<{
         </button>
       </div>
 
-      {/* 🥔 1. POTATO FIELD SECTION */}
+      {/* 🥔 1. POTATO FIELD SECTION WITH LIVE COUNTDOWN TIMER */}
       <section className="bg-[#244527] rounded-3xl p-4 border-2 border-[#3d7a44] shadow-xl relative overflow-hidden">
-        <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-xl">🥔</span>
+            <span className="text-2xl">🥔</span>
             <div>
               <h2 className="font-['Fredoka'] font-bold text-base text-amber-200">
                 Картопляне поле
               </h2>
-              <span className="text-[11px] text-emerald-200/80">
-                Посаджено: {potato.count} кущів • Насіння в коморі: {potatoSeedsAvailable} шт.
+              <span className="text-[11px] text-emerald-200/90 font-medium">
+                Посаджено: <b className="text-yellow-300">{plantedBushes} кущів</b> • Насіння в коморі: <b>{potatoSeedsAvailable} шт.</b>
               </span>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 bg-[#173019] px-2.5 py-1 rounded-full border border-emerald-600/50 text-xs">
+          <div className="flex items-center gap-1.5 bg-[#173019] px-3 py-1 rounded-full border border-emerald-600/60 text-xs shadow-sm">
             {potatoReady ? (
-              <span className="text-emerald-300 font-bold flex items-center gap-1 animate-pulse">
-                <Sparkles className="w-3 h-3" /> Дозріло!
+              <span className="text-emerald-300 font-bold flex items-center gap-1.5 animate-pulse">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Дозріло! Готово до збору
               </span>
-            ) : potato.count > 0 ? (
-              <span className="text-amber-300 font-semibold text-[11px]">
-                {potato.seconds_left ? `Залишилось ${potato.seconds_left}с` : "Росте..."} ({potatoProgress}%)
+            ) : plantedBushes > 0 ? (
+              <span className="text-amber-300 font-bold flex items-center gap-1.5">
+                <Clock className="w-3.5 h-3.5 text-amber-400 animate-spin" />
+                Росте ({potatoProgress}%)
               </span>
             ) : (
               <span className="text-gray-300 text-[11px]">Поле пусте</span>
@@ -123,13 +199,38 @@ export const FarmCanvas: React.FC<{
           </div>
         </div>
 
+        {/* ⏰ PROMINENT LIVE COUNTDOWN TIMER CARD */}
+        {plantedBushes > 0 && !potatoReady && (
+          <div className="mb-3 p-3 bg-[#17341a] rounded-2xl border border-amber-500/50 shadow-inner flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-amber-950/60 border border-amber-400/60 flex items-center justify-center text-lg text-amber-300 shrink-0">
+                <Timer className="w-5 h-5 text-amber-400" />
+              </div>
+              <div>
+                <span className="text-[10px] text-emerald-300 uppercase tracking-wider font-bold block">
+                  Лічильник дозрівання
+                </span>
+                <span className="text-sm font-['Fredoka'] font-black text-yellow-300">
+                  Через {formatTimer(potatoSecondsLeft)}
+                </span>
+              </div>
+            </div>
+
+            <div className="text-right">
+              <span className="text-xs font-bold text-amber-300 bg-amber-950/80 px-2 py-0.5 rounded-lg border border-amber-700/60">
+                {potatoProgress}%
+              </span>
+            </div>
+          </div>
+        )}
+
         {/* Visual Scene for Potato */}
         <div className="relative bg-gradient-to-b from-[#1b3d1f] to-[#142d17] rounded-2xl p-4 border border-emerald-900/80 flex flex-col items-center justify-center my-2 shadow-inner min-h-[140px]">
           <PotatoPlotSprite progress={potatoProgress} ready={potatoReady} />
 
-          {potato.count > 0 && (
-            <div className="w-full max-w-xs mt-2">
-              <div className="h-2.5 bg-emerald-950 rounded-full overflow-hidden border border-emerald-700/60 p-[1px]">
+          {plantedBushes > 0 && (
+            <div className="w-full max-w-xs mt-3">
+              <div className="h-3 bg-emerald-950 rounded-full overflow-hidden border border-emerald-700/60 p-[1px] shadow-inner">
                 <motion.div
                   className={`h-full rounded-full transition-all duration-300 ${
                     potatoReady
@@ -138,6 +239,12 @@ export const FarmCanvas: React.FC<{
                   }`}
                   animate={{ width: `${potatoProgress}%` }}
                 />
+              </div>
+              <div className="flex justify-between text-[10px] text-emerald-300/80 mt-1 font-semibold">
+                <span>🌱 Посадка</span>
+                <span>🌿 Ріст</span>
+                <span>🌸 Цвіт</span>
+                <span>🥔 Стигло</span>
               </div>
             </div>
           )}
@@ -153,10 +260,10 @@ export const FarmCanvas: React.FC<{
                 onAction("collect_all");
               }}
               disabled={isLoading}
-              className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-95 text-white font-['Fredoka'] font-bold text-sm rounded-2xl shadow-lg border border-emerald-300 flex items-center justify-center gap-2"
+              className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 active:scale-95 text-white font-['Fredoka'] font-bold text-sm rounded-2xl shadow-lg border border-emerald-300 flex items-center justify-center gap-2 transition-all cursor-pointer animate-pulse"
             >
-              <Sparkles className="w-4 h-4" />
-              Викопати картоплю (+{potato.count * 3} шт.)
+              <Sparkles className="w-5 h-5 text-yellow-200" />
+              Викопати картоплю (+{plantedBushes * 3} шт.)
             </button>
           ) : (
             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 bg-[#173019] p-2.5 rounded-2xl border border-emerald-700/60">
@@ -177,7 +284,7 @@ export const FarmCanvas: React.FC<{
                   type="button"
                   onClick={() => setPotatoPlantInput(String(potatoSeedsAvailable))}
                   disabled={potatoSeedsAvailable <= 0}
-                  className="px-2 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 text-yellow-300 text-xs font-bold rounded-lg border border-amber-500/50 transition-all"
+                  className="px-2.5 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 text-yellow-300 text-xs font-bold rounded-lg border border-amber-500/50 transition-all cursor-pointer"
                 >
                   Все ({potatoSeedsAvailable})
                 </button>
@@ -189,10 +296,10 @@ export const FarmCanvas: React.FC<{
                   triggerHaptic("medium");
                   onAction("plant_potato", { count: parsedPlantCount });
                 }}
-                disabled={isLoading || potatoSeedsAvailable <= 0 || parsedPlantCount <= 0 || potato.count > 0}
+                disabled={isLoading || potatoSeedsAvailable <= 0 || parsedPlantCount <= 0 || plantedBushes > 0}
                 className={`py-2 px-4 rounded-xl font-['Fredoka'] font-bold text-xs shadow-md border flex items-center justify-center gap-1.5 transition-all ${
-                  potatoSeedsAvailable > 0 && parsedPlantCount > 0 && potato.count === 0
-                    ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 active:scale-95 text-amber-950 border-amber-300"
+                  potatoSeedsAvailable > 0 && parsedPlantCount > 0 && plantedBushes === 0
+                    ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 active:scale-95 text-amber-950 border-amber-300 cursor-pointer"
                     : "bg-gray-800 text-gray-500 border-gray-700 cursor-not-allowed"
                 }`}
               >
