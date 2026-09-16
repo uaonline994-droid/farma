@@ -2,6 +2,7 @@
 
 interface ImportMetaEnv {
   readonly VITE_BOT_USERNAME?: string;
+  readonly VITE_API_URL?: string;
 }
 
 interface ImportMeta {

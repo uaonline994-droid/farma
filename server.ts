@@ -770,6 +770,254 @@ app.post("/api/action", (req: Request, res: Response) => {
       return res.json({ ok: true, message: `👨‍🌾 Найнято помічника! Швидкість роботи ферми зросла на +10%.` });
     }
 
+    case "buy_business":
+    case "business_buy": {
+      const bizPrices: Record<string, { price: number; name: string }> = {
+        kiosk: { price: 30000, name: "Кіоск" },
+        cafe: { price: 200000, name: "Кафе" },
+        shop: { price: 1200000, name: "Магазин" },
+        restaurant: { price: 7000000, name: "Ресторан" },
+        factory: { price: 40000000, name: "Завод" },
+        corporation: { price: 250000000, name: "Корпорація" },
+        monopoly: { price: 1500000000, name: "Монополія" },
+      };
+      const bizKey = String(item || "kiosk");
+      const info = bizPrices[bizKey] || { price: 50000, name: bizKey };
+      if (session.economy.balance < info.price) {
+        return res.status(400).json({ ok: false, message: `Не вистачає коштів на купівлю ${info.name}! Потрібно 🪙 ${info.price.toLocaleString()}` });
+      }
+      session.economy.balance -= info.price;
+      if (bizKey === "kiosk") session.business.upgrades.sprinkler += 1;
+      else if (bizKey === "cafe") session.business.upgrades.auto_feeder += 1;
+      else if (bizKey === "shop") session.business.upgrades.tractor += 1;
+      addXp(session, Math.round(info.price * 0.02));
+      return res.json({ ok: true, message: `🏢 Придбано підприємство «${info.name}»! Пасивний дохід зріс.` });
+    }
+
+    case "sell_animal": {
+      const animalPrices: Record<string, number> = {
+        chick: 40,
+        chicken: 60,
+        rooster: 180,
+        pig: 280,
+        cow: 600,
+        ostrich: 4000,
+      };
+      const animalKey = String(item || "");
+      const unitPrice = animalPrices[animalKey] || 50;
+      const countToSell = amount;
+      let availableCount = 0;
+
+      if (animalKey === "chick") availableCount = session.farm.chickens.chicks;
+      else if (animalKey === "chicken") availableCount = session.farm.chickens.count;
+      else if (animalKey === "rooster") availableCount = session.farm.chickens.roosters;
+      else if (animalKey === "pig") availableCount = session.farm.pigs.count;
+      else if (animalKey === "cow") availableCount = session.farm.cows.count;
+      else if (animalKey === "ostrich") availableCount = session.farm.ostriches.count;
+
+      if (availableCount < countToSell) {
+        return res.status(400).json({ ok: false, message: "Немає стільки тварин для продажу!" });
+      }
+
+      if (animalKey === "chick") session.farm.chickens.chicks -= countToSell;
+      else if (animalKey === "chicken") session.farm.chickens.count -= countToSell;
+      else if (animalKey === "rooster") session.farm.chickens.roosters -= countToSell;
+      else if (animalKey === "pig") session.farm.pigs.count -= countToSell;
+      else if (animalKey === "cow") session.farm.cows.count -= countToSell;
+      else if (animalKey === "ostrich") session.farm.ostriches.count -= countToSell;
+
+      const animalEarnings = unitPrice * countToSell;
+      session.economy.balance += animalEarnings;
+      addXp(session, Math.round(animalEarnings * 0.05));
+      return res.json({ ok: true, message: `🐾 Продано ${countToSell} тварин за 🪙 ${animalEarnings.toLocaleString()}!` });
+    }
+
+    case "wheat_sell_local": {
+      const amountToSell = amount || session.wheat.granary_used;
+      const actualSell = Math.min(session.wheat.granary_used, amountToSell);
+      if (actualSell <= 0) {
+        return res.status(400).json({ ok: false, message: "Немає пшениці для продажу!" });
+      }
+      const earned = actualSell * (session.economy.prices.wheat || 45);
+      session.wheat.granary_used -= actualSell;
+      session.economy.balance += earned;
+      addXp(session, Math.round(earned * 0.05));
+      return res.json({
+        ok: true,
+        message: `🌾 Продано ${actualSell} снопів пшениці за 🪙 ${earned.toLocaleString()}!`,
+      });
+    }
+
+    case "casino":
+    case "casino_spin":
+    case "gamble": {
+      const betAmount = Number(req.body.bet) || 0;
+      const winAmount = Number(req.body.win) || 0;
+      const delta = winAmount - betAmount;
+      session.economy.balance = Math.max(0, session.economy.balance + delta);
+      if (winAmount > 0) {
+        addXp(session, Math.min(250, Math.round(winAmount * 0.05)));
+      }
+      return res.json({
+        ok: true,
+        message: winAmount > 0 ? `🎰 Виграш у слоті: +${winAmount.toLocaleString()} 🪙!` : `🎰 Спін завершено (ставка ${betAmount} 🪙)`,
+      });
+    }
+
+    case "collect_farm":
+    case "collect_all":
+    case "harvest_potato":
+    case "collect_eggs":
+    case "collect_milk":
+    case "collect_ostrich": {
+      // Collect all ready harvests
+      let collectedItems: string[] = [];
+      let totalXp = 0;
+
+      const potatoElapsed = (now - session.farm.potato.planted_at) / 1000;
+      if (session.farm.potato.planted_at > 0 && potatoElapsed >= session.farm.potato.growth_duration) {
+        const yieldAmount = (session.farm.potato.count || 1) * 3;
+        session.farm.potato.count = 0;
+        session.farm.potato.planted_at = 0;
+        session.economy.storage.used += yieldAmount;
+        collectedItems.push(`🥔 ${yieldAmount} шт. картоплі`);
+        totalXp += 40;
+      }
+
+      if (session.farm.chickens.eggs > 0) {
+        const eggs = session.farm.chickens.eggs;
+        session.economy.storage.used += eggs;
+        collectedItems.push(`🥚 ${eggs} яєць`);
+        totalXp += eggs * 2;
+        session.farm.chickens.eggs = 0;
+      }
+
+      if (session.farm.cows.milk > 0) {
+        const milk = session.farm.cows.milk;
+        session.economy.storage.used += milk;
+        collectedItems.push(`🥛 ${milk} л молока`);
+        totalXp += milk * 4;
+        session.farm.cows.milk = 0;
+      }
+
+      if (session.farm.ostriches.feathers > 0) {
+        const feathers = session.farm.ostriches.feathers;
+        session.economy.storage.used += feathers;
+        collectedItems.push(`🪶 ${feathers} пір'їн`);
+        totalXp += feathers * 8;
+        session.farm.ostriches.feathers = 0;
+      }
+
+      if (collectedItems.length === 0) {
+        return res.json({ ok: true, message: "Наразі немає готової продукції для збору. Зачекайте трохи!" });
+      }
+
+      addXp(session, totalXp);
+      return res.json({
+        ok: true,
+        message: `🌾 Успішно зібрано: ${collectedItems.join(", ")}! (+${totalXp} XP)`,
+      });
+    }
+
+    case "wheat_plant": {
+      let plantedCount = 0;
+      session.wheat.plots.forEach((plot) => {
+        if (plot.planted_at === 0 && session.economy.seed_stock.wheat > 0) {
+          plot.planted_at = now;
+          session.economy.seed_stock.wheat -= 1;
+          plantedCount++;
+        }
+      });
+      if (plantedCount === 0) {
+        return res.status(400).json({ ok: false, message: "Немає вільних ділянок або закінчилося насіння пшениці!" });
+      }
+      return res.json({ ok: true, message: `🌾 Засіяно ${plantedCount} ділянок пшениці!` });
+    }
+
+    case "wheat_collect": {
+      let harvestedCount = 0;
+      let totalYield = 0;
+      session.wheat.plots.forEach((plot) => {
+        const elapsed = (now - plot.planted_at) / 1000;
+        if (plot.planted_at > 0 && elapsed >= plot.duration) {
+          const plotYield = 6 + (session.business.upgrades.tractor || 0) * 2;
+          totalYield += plotYield;
+          plot.planted_at = 0;
+          harvestedCount++;
+        }
+      });
+      if (harvestedCount === 0) {
+        return res.json({ ok: true, message: "Пшениця ще дозріває на ділянках!" });
+      }
+      session.wheat.granary_used = Math.min(session.wheat.granary_max, session.wheat.granary_used + totalYield);
+      session.wheat.total_harvested += totalYield;
+      addXp(session, harvestedCount * 15);
+      return res.json({
+        ok: true,
+        message: `✨ Зібрано ${harvestedCount} ділянок! Отримано 🌾 ${totalYield} снопів пшениці у сховище.`,
+      });
+    }
+
+    case "sell_product": {
+      const itemToSell = req.body.item;
+      const sellAmount = Number(req.body.count) || 1;
+      const prices = session.economy.prices;
+
+      let itemPrice = 10;
+      let available = 0;
+
+      if (itemToSell === "potato") {
+        itemPrice = prices.potato;
+        available = session.farm.potato.count;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає картоплі для продажу!" });
+        session.farm.potato.count -= sellAmount;
+      } else if (itemToSell === "egg" || itemToSell === "eggs") {
+        itemPrice = prices.egg;
+        available = session.farm.chickens.eggs;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає яєць!" });
+        session.farm.chickens.eggs -= sellAmount;
+      } else if (itemToSell === "milk") {
+        itemPrice = prices.milk;
+        available = session.farm.cows.milk;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає молока!" });
+        session.farm.cows.milk -= sellAmount;
+      } else if (itemToSell === "cheese") {
+        itemPrice = prices.cheese;
+        available = session.farm.cows.cheese;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає сиру!" });
+        session.farm.cows.cheese -= sellAmount;
+      } else if (itemToSell === "meat") {
+        itemPrice = prices.meat;
+        available = session.farm.pigs.meat;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає м'яса!" });
+        session.farm.pigs.meat -= sellAmount;
+      } else if (itemToSell === "feather" || itemToSell === "feathers") {
+        itemPrice = prices.ostrich_feather;
+        available = session.farm.ostriches.feathers;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає пір'я!" });
+        session.farm.ostriches.feathers -= sellAmount;
+      } else if (itemToSell === "ostrich_egg" || itemToSell === "ostrich_eggs") {
+        itemPrice = prices.ostrich_egg;
+        available = session.farm.ostriches.eggs;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає страусиних яєць!" });
+        session.farm.ostriches.eggs -= sellAmount;
+      } else if (itemToSell === "wheat") {
+        itemPrice = prices.wheat;
+        available = session.wheat.granary_used;
+        if (available < sellAmount) return res.status(400).json({ ok: false, message: "Не вистачає пшениці у сховищі!" });
+        session.wheat.granary_used -= sellAmount;
+      }
+
+      const earnings = itemPrice * sellAmount;
+      session.economy.balance += earnings;
+      addXp(session, Math.round(earnings * 0.05));
+
+      return res.json({
+        ok: true,
+        message: `💰 Продано ${sellAmount} од. на ринку за 🪙 ${earnings.toLocaleString()}!`,
+      });
+    }
+
     default:
       return res.json({ ok: true, message: "Дію успішно виконано!" });
   }

@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { initTelegramApp, getTelegramUser } from "./services/telegram";
-import { fetchGameStateWithUser, executeAction } from "./services/api";
+import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
+import { fetchGameStateWithUser, executeAction, authenticateTelegramUser } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
@@ -43,17 +43,44 @@ function FarmGame() {
   useEffect(() => {
     initTelegramApp();
 
+    const initData = getTelegramInitData();
     const tgUser = getTelegramUser();
+
     if (tgUser) {
       const name = `${tgUser.first_name || ""} ${tgUser.last_name || ""}`.trim() || tgUser.username || "Фермер";
       setAuthData(tgUser.id, tgUser.id, name);
+    } else if (initData) {
+      setAuthLoading(false);
     } else {
       setAuthLoading(false);
       setAuthError(null);
     }
   }, [setAuthData, setAuthLoading, setAuthError]);
 
-  // 2. Fetch Game State & User Sync via TanStack Query
+  // 2. Explicit Telegram authorization — verifies signed initData on the backend
+  // BEFORE any game data is requested. This is what guarantees the user, balance
+  // and farm are tied to the correct, server-verified Telegram identity the moment
+  // the Mini App opens (not just whatever the client-side WebApp object claims).
+  const {
+    data: authResult,
+    isLoading: isAuthLoading,
+    error: authError2,
+    refetch: refetchAuth,
+  } = useQuery({
+    queryKey: ["telegramAuth"],
+    queryFn: authenticateTelegramUser,
+    retry: 1,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+  });
+
+  useEffect(() => {
+    if (authResult) {
+      setAuthData(authResult.chat_id, authResult.user_id, authResult.name);
+    }
+  }, [authResult, setAuthData]);
+
+  // 3. Fetch Game State & User Sync via TanStack Query — only once authorized
   const {
     data: fetchedResult,
     isLoading: isStateLoading,
@@ -64,7 +91,7 @@ function FarmGame() {
     queryKey: ["gameState"],
     queryFn: fetchGameStateWithUser,
     refetchInterval: 5000,
-    retry: 2,
+    enabled: !!authResult,
   });
 
   // Sync state and server user info to Zustand store
@@ -77,8 +104,8 @@ function FarmGame() {
     }
   }, [fetchedResult, setGameState, setAuthData]);
 
-  const blockingError = stateError;
-  const isBlockingLoading = isStateLoading && !gameState;
+  const blockingError = authError2 || stateError;
+  const isBlockingLoading = isAuthLoading || (isStateLoading && !!authResult);
 
   // 4. Action Mutation (POST /api/action)
   const actionMutation = useMutation({
@@ -119,9 +146,10 @@ function FarmGame() {
           <ErrorState
             error={blockingError as Error}
             onRetry={() => {
+              refetchAuth();
               refetchState();
             }}
-            isRetrying={isFetching}
+            isRetrying={isFetching || isAuthLoading}
           />
         ) : (
           <AnimatePresence mode="wait">
