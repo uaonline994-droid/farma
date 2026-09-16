@@ -314,6 +314,48 @@ export const BankView: React.FC<{
               </button>
             </div>
           )}
+
+          {/* 📜 Active Deposits List from Bot & Web */}
+          {bank.active_deposits && bank.active_deposits.length > 0 && (
+            <div className="flex flex-col gap-2.5 pt-3 border-t border-teal-800/60">
+              <div className="flex items-center justify-between">
+                <span className="font-['Fredoka'] font-bold text-xs text-teal-300 uppercase tracking-wider flex items-center gap-1.5">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  Синхронізовані вклади та депозити
+                </span>
+                <span className="text-[10px] text-emerald-300 bg-emerald-950/80 px-2 py-0.5 rounded-lg border border-emerald-700/60">
+                  {bank.active_deposits.length} вкладів
+                </span>
+              </div>
+
+              <div className="flex flex-col gap-2 max-h-52 overflow-y-auto pr-1 scrollbar-thin">
+                {bank.active_deposits.map((dep, idx) => (
+                  <div
+                    key={dep.id || idx}
+                    className="bg-[#0b1721] p-2.5 rounded-xl border border-teal-700/50 flex items-center justify-between text-xs"
+                  >
+                    <div>
+                      <div className="font-bold text-emerald-200 flex items-center gap-1.5">
+                        <span>💰 {dep.amount.toLocaleString()} ₴</span>
+                        <span className="text-[10px] text-yellow-400 bg-yellow-950/60 px-1.5 py-0.2 rounded border border-yellow-500/40">
+                          +{dep.rate || 8}%
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-teal-300/80 mt-0.5">
+                        {dep.user_name || "Вклад користувача"} • {dep.created_at || "Активний"}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-emerald-400 font-bold block text-xs">
+                        +{(dep.profit || Math.round(dep.amount * 0.08)).toLocaleString()} ₴
+                      </span>
+                      <span className="text-[9px] text-gray-400">дохідність</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
