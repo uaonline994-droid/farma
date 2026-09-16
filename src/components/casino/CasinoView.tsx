@@ -315,7 +315,11 @@ export const CasinoView: React.FC<{
   // Main Spin & Cascade Routine
   const handleSpin = async () => {
     if (isSpinning) return;
-    if (balance < bet && !isFreeSpinsMode) {
+
+    const currentGameState = useGameStore.getState().gameState;
+    const currentBalance = currentGameState?.economy.balance ?? 0;
+
+    if (!isFreeSpinsMode && currentBalance < bet) {
       triggerHaptic("warning");
       addToast("Недостатньо монет для ставки в Candy Utopia!", "warning");
       return;
@@ -330,14 +334,27 @@ export const CasinoView: React.FC<{
     triggerHaptic("heavy");
     if (soundRef.current) playLeverPullSound();
 
-    // 1. Deduct bet from local state
-    if (!isFreeSpinsMode && gameState) {
-      setGameState({
-        ...gameState,
+    const actualBet = isFreeSpinsMode ? 0 : bet;
+
+    // 1. Deduct bet from store state atomically
+    if (actualBet > 0 && currentGameState) {
+      useGameStore.getState().setGameState({
+        ...currentGameState,
         economy: {
-          ...gameState.economy,
-          balance: gameState.economy.balance - bet,
+          ...currentGameState.economy,
+          balance: Math.max(0, currentBalance - actualBet),
         },
+      });
+    }
+
+    if (isFreeSpinsMode) {
+      setFreeSpinsLeft((prev) => {
+        const nextVal = prev - 1;
+        if (nextVal <= 0) {
+          setIsFreeSpinsMode(false);
+          return 0;
+        }
+        return nextVal;
       });
     }
 
@@ -353,7 +370,7 @@ export const CasinoView: React.FC<{
       tickCount++;
     }, 70);
 
-    await new Promise((r) => setTimeout(r, 800));
+    await new Promise((r) => setTimeout(r, 750));
     clearInterval(tickInterval);
     setGrid(newGrid);
     if (soundRef.current) playReelStop(0);
@@ -382,7 +399,7 @@ export const CasinoView: React.FC<{
       } catch {}
 
       // Tumble step 1: replace winning with new falling candies
-      await new Promise((r) => setTimeout(r, 1000));
+      await new Promise((r) => setTimeout(r, 900));
 
       const tumbledGrid = newGrid.map((cell, idx) =>
         evalResult.winningIndices.includes(idx) ? getRandomCandy() : cell
@@ -399,7 +416,7 @@ export const CasinoView: React.FC<{
         setRoundWin(currentRoundWin);
         if (soundRef.current) playWinBigSound();
 
-        await new Promise((r) => setTimeout(r, 900));
+        await new Promise((r) => setTimeout(r, 800));
         const thirdGrid = tumbledGrid.map((cell, idx) =>
           secondaryEval.winningIndices.includes(idx) ? getRandomCandy() : cell
         );
@@ -435,16 +452,28 @@ export const CasinoView: React.FC<{
       if (soundRef.current) playLoseSound();
     }
 
-    // 5. Finalize balance in store (Preserves balance changes correctly!)
-    if (currentRoundWin > 0 && gameState) {
-      setGameState({
-        ...gameState,
-        economy: {
-          ...gameState.economy,
-          balance: gameState.economy.balance - (!isFreeSpinsMode ? bet : 0) + currentRoundWin,
-        },
-      });
+    // 5. Finalize win balance in store
+    if (currentRoundWin > 0) {
+      const latestState = useGameStore.getState().gameState;
+      if (latestState) {
+        useGameStore.getState().setGameState({
+          ...latestState,
+          economy: {
+            ...latestState.economy,
+            balance: latestState.economy.balance + currentRoundWin,
+          },
+        });
+      }
       triggerCoinAnimation(currentRoundWin);
+    }
+
+    // 6. Notify backend if action handler is provided
+    if (onAction) {
+      try {
+        await onAction("casino", { bet: actualBet, win: currentRoundWin });
+      } catch {
+        // Fallback gracefully if backend doesn't implement casino endpoint
+      }
     }
 
     setIsSpinning(false);

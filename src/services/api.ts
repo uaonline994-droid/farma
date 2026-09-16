@@ -4,6 +4,10 @@ import { GameState, ActionResponse, LeaderboardResponse, EconomyPrices } from ".
 export const PERMANENT_BACKEND_URL = "https://artemfurry.pythonanywhere.com";
 
 export function getBaseUrl(): string {
+  // Use relative path when in browser so requests proxy through Express / Vite / Vercel without CORS errors
+  if (typeof window !== "undefined") {
+    return "";
+  }
   return PERMANENT_BACKEND_URL;
 }
 
@@ -512,6 +516,10 @@ export async function executeAction(
     pythonAction = "fulfill_contract";
   } else if (actionName === "new_contract") {
     pythonAction = "new_contract";
+  } else if (actionName === "casino" || actionName === "casino_spin" || actionName === "gamble") {
+    pythonAction = "casino";
+    pythonPayload.bet = Number(params.bet) || 0;
+    pythonPayload.win = Number(params.win) || 0;
   }
 
   const baseUrl = getBaseUrl();
