@@ -4,11 +4,7 @@ import { GameState, ActionResponse, LeaderboardResponse, EconomyPrices } from ".
 export const PERMANENT_BACKEND_URL = "https://artemfurry.pythonanywhere.com";
 
 export function getBaseUrl(): string {
-  if (typeof window !== "undefined") {
-    const custom = localStorage.getItem("farmer_custom_backend_url")?.trim();
-    if (custom) return custom.replace(/\/$/, "");
-  }
-  return (import.meta.env.VITE_API_URL || PERMANENT_BACKEND_URL).replace(/\/$/, "");
+  return PERMANENT_BACKEND_URL;
 }
 
 export function getCustomBackendUrl(): string {
@@ -50,6 +46,22 @@ export function clearTelegramCredentials() {
   if (typeof window !== "undefined") {
     localStorage.removeItem("farmer_custom_tg_id");
     localStorage.removeItem("farmer_custom_tg_name");
+  }
+}
+
+export async function keepBackendAwake(): Promise<boolean> {
+  try {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 8000);
+    const response = await fetch(`${PERMANENT_BACKEND_URL}/health`, {
+      method: "GET",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    window.clearTimeout(timeout);
+    return response.ok;
+  } catch {
+    return false;
   }
 }
 
