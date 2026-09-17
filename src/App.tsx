@@ -1,7 +1,7 @@
 import React, { useEffect } from "react";
 import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
-import { fetchGameStateWithUser, executeAction, authenticateTelegramUser } from "./services/api";
+import { fetchGameStateWithUser, executeAction, authenticateTelegramUser, keepBackendAwake } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
@@ -13,7 +13,6 @@ import { WheatFieldView } from "./components/wheat/WheatFieldView";
 import { MarketView } from "./components/market/MarketView";
 import { ShopView } from "./components/shop/ShopView";
 import { BusinessView } from "./components/business/BusinessView";
-import { CasinoView } from "./components/casino/CasinoView";
 import { BankView } from "./components/bank/BankView";
 import { LeaderboardView } from "./components/leaderboard/LeaderboardView";
 import { ProfileView } from "./components/profile/ProfileView";
@@ -39,6 +38,12 @@ function FarmGame() {
     addToast,
     gameState,
   } = useGameStore();
+
+  useEffect(() => {
+    keepBackendAwake();
+    const intervalId = window.setInterval(keepBackendAwake, 4 * 60 * 1000);
+    return () => window.clearInterval(intervalId);
+  }, []);
 
   // 1. Telegram App Initialization & Local InitData / User Setup
   useEffect(() => {
@@ -175,9 +180,6 @@ function FarmGame() {
               )}
               {activeTab === "bank" && (
                 <BankView onAction={handleAction} isLoading={actionMutation.isPending} />
-              )}
-              {activeTab === "casino" && (
-                <CasinoView onAction={handleAction} isLoading={actionMutation.isPending} />
               )}
               {activeTab === "business" && (
                 <BusinessView onAction={handleAction} isLoading={actionMutation.isPending} />
