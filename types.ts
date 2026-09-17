@@ -97,9 +97,22 @@ export interface BankDepositItem {
   profit?: number;
 }
 
+export interface MarketplaceItem {
+  listing_id: number;
+  seller_id: number;
+  seller_name?: string;
+  item_key: string;
+  item_name?: string;
+  qty: number;
+  price: number;
+}
+
 export interface BankState {
   deposit: number;
   deposit_rate: number;
+  deposited_at?: string | null;
+  profit_accrued?: number;
+  hours_elapsed?: number;
   loan: number;
   loan_limit: number;
   safe_balance: number;
@@ -213,7 +226,7 @@ export interface ActionResponse {
   state?: GameState;
 }
 
-export type TabType = "farm" | "wheat" | "market" | "shop" | "bank" | "business" | "casino" | "leaderboard" | "profile";
+export type TabType = "farm" | "wheat" | "market" | "shop" | "bank" | "business" | "leaderboard" | "profile";
 
 export interface ToastItem {
   id: string;

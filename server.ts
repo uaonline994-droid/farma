@@ -848,22 +848,6 @@ app.post("/api/action", (req: Request, res: Response) => {
       });
     }
 
-    case "casino":
-    case "casino_spin":
-    case "gamble": {
-      const betAmount = Number(req.body.bet) || 0;
-      const winAmount = Number(req.body.win) || 0;
-      const delta = winAmount - betAmount;
-      session.economy.balance = Math.max(0, session.economy.balance + delta);
-      if (winAmount > 0) {
-        addXp(session, Math.min(250, Math.round(winAmount * 0.05)));
-      }
-      return res.json({
-        ok: true,
-        message: winAmount > 0 ? `🎰 Виграш у слоті: +${winAmount.toLocaleString()} 🪙!` : `🎰 Спін завершено (ставка ${betAmount} 🪙)`,
-      });
-    }
-
     case "collect_farm":
     case "collect_all":
     case "harvest_potato":

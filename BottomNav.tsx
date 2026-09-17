@@ -49,11 +49,6 @@ export const BottomNav: React.FC = () => {
       icon: <Landmark className="w-5 h-5 text-cyan-300" />,
     },
     {
-      id: "casino",
-      label: "Казино",
-      icon: <Dices className="w-5 h-5 text-amber-300" />,
-    },
-    {
       id: "business",
       label: "Бізнес",
       icon: <Briefcase className="w-5 h-5" />,

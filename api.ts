@@ -652,15 +652,6 @@ export async function executeAction(
     pythonPayload.business = rawBizKey;
     pythonPayload.type = rawBizKey;
     pythonPayload.name = rawBizKey;
-  } else if (actionName === "casino" || actionName === "casino_spin" || actionName === "gamble") {
-    const bet = Number(params.bet) || 0;
-    const win = Number(params.win) || 0;
-    const net = win - bet;
-    pythonAction = "casino";
-    pythonPayload.bet = bet;
-    pythonPayload.win = win;
-    pythonPayload.delta = net;
-    pythonPayload.amount = net;
   } else if (actionName === "bank_deposit" || actionName === "deposit") {
     const amt = Number(params.amount) || 0;
     pythonAction = "bank_deposit";
