@@ -768,7 +768,7 @@ export async function fetchBankRollbacks(): Promise<BankRollbackCandidate[]> {
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.error || "Помилка адмін-панелі", res.status);
-  return Array.isArray(data.rollbacks) ? data.rollbacks : [];
+  return Array.isArray(data.rollbacks) ? data.rollbacks : []; 
 }
 
 export async function applyBankRollback(userId: number): Promise<BankRollbackCandidate> {
