@@ -68,7 +68,7 @@ export const BottomNav: React.FC<{ isAdmin?: boolean }> = ({ isAdmin = false }) 
   ];
 
   if (isAdmin) {
-    tabs.push({
+    tabs.unshift({
       id: "admin",
       label: "Адмін",
       icon: <ShieldCheck className="w-5 h-5 text-red-300" />,
@@ -77,7 +77,7 @@ export const BottomNav: React.FC<{ isAdmin?: boolean }> = ({ isAdmin = false }) 
 
   return (
     <nav className="fixed bottom-0 left-0 right-0 z-40 bg-[#1e3d21]/95 backdrop-blur-lg border-t-2 border-[#3d7a44] pb-[env(safe-area-inset-bottom,10px)] shadow-[0_-8px_20px_rgba(0,0,0,0.4)]">
-      <div className="max-w-xl mx-auto flex items-center justify-around px-1 py-1.5">
+      <div className="max-w-xl mx-auto flex items-center justify-start gap-1 overflow-x-auto px-1 py-1.5 scrollbar-none">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
@@ -88,7 +88,7 @@ export const BottomNav: React.FC<{ isAdmin?: boolean }> = ({ isAdmin = false }) 
                 triggerHaptic("medium");
                 setActiveTab(tab.id);
               }}
-              className={`relative flex flex-col items-center justify-center flex-1 py-1 px-0.5 rounded-xl transition-all ${
+              className={`relative flex min-w-[58px] flex-1 flex-col items-center justify-center py-1 px-0.5 rounded-xl transition-all ${
                 isActive
                   ? "text-amber-300 font-bold"
                   : "text-emerald-200/80 hover:text-amber-100 hover:bg-emerald-800/30"
