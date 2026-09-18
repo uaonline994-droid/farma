@@ -226,7 +226,7 @@ export interface ActionResponse {
   state?: GameState;
 }
 
-export type TabType = "farm" | "wheat" | "market" | "shop" | "bank" | "business" | "leaderboard" | "profile";
+export type TabType = "farm" | "wheat" | "market" | "shop" | "bank" | "business" | "leaderboard" | "profile" | "admin";
 
 export interface ToastItem {
   id: string;
