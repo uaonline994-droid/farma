@@ -762,6 +762,20 @@ export interface BankRollbackCandidate {
   baseline_available: boolean;
 }
 
+export interface AdminUserSummary {
+  user_id: number;
+  name: string;
+  username?: string | null;
+  balance: number;
+  deposit: number;
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  deposit_started_at?: string | null;
+  tag?: string | null;
+  businesses: Record<string, { qty: number; last_collect?: string | null }>;
+}
+
 export async function fetchBankRollbacks(): Promise<BankRollbackCandidate[]> {
   let res: Response;
   try {
@@ -786,4 +800,38 @@ export async function applyBankRollback(userId: number): Promise<BankRollbackCan
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.error || "Помилка відкату", res.status);
   return data.rollback;
+}
+
+export async function searchAdminUsers(query: string): Promise<AdminUserSummary[]> {
+  const q = (query || "").trim();
+  const res = await fetch(`${getBaseUrl()}/api/admin/users/search?q=${encodeURIComponent(q)}`, {
+    method: "GET",
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка пошуку користувача", res.status);
+  return Array.isArray(data.users) ? data.users : [];
+}
+
+export async function fetchAdminUser(userId: number): Promise<AdminUserDetail> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/users/${userId}`, {
+    method: "GET",
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка завантаження користувача", res.status);
+  return data.user;
+}
+
+export async function adminUserAction(userId: number, action: string, payload: Record<string, unknown> = {}): Promise<AdminUserDetail> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/users/${userId}/action`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка адміністрування", res.status);
+  return data.user;
 }
