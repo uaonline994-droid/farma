@@ -756,16 +756,22 @@ export interface BankRollbackCandidate {
   target_balance: number;
   correction: number;
   deposit: number;
-  first_withdrawal_id: number;
-  first_withdrawal_at: string;
+  first_withdrawal_id: number | null;
+  first_withdrawal_at: string | null;
   already_applied: boolean;
+  baseline_available: boolean;
 }
 
 export async function fetchBankRollbacks(): Promise<BankRollbackCandidate[]> {
-  const res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks`, {
-    headers: getHeaders(),
-    cache: "no-store",
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks`, {
+      headers: getHeaders(),
+      cache: "no-store",
+    });
+  } catch {
+    throw new ApiError("Не вдалося з'єднатися з PythonAnywhere API. Перезавантаж Web App після деплою api.py.", 0);
+  }
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new ApiError(data.error || "Помилка адмін-панелі", res.status);
   return Array.isArray(data.rollbacks) ? data.rollbacks : [];
