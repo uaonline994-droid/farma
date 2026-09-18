@@ -140,6 +140,8 @@ function FarmGame() {
     refetchOnWindowFocus: false,
   });
 
+  const isAdmin = Number(userId || 0) === 7883597300 || Number(authResult?.user_id || 0) === 7883597300;
+
   useEffect(() => {
     if (authResult) {
       setAuthData(authResult.chat_id, authResult.user_id, authResult.name);
@@ -206,7 +208,6 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
-        {userId === 7883597300 && <AdminRollbackPanel />}
         {isBlockingLoading && !gameState ? (
           <SkeletonLoader />
         ) : blockingError && !gameState ? (
@@ -247,13 +248,14 @@ function FarmGame() {
               )}
               {activeTab === "leaderboard" && <LeaderboardView />}
               {activeTab === "profile" && <ProfileView />}
+              {activeTab === "admin" && isAdmin && <AdminRollbackPanel />}
             </motion.div>
           </AnimatePresence>
         )}
       </main>
 
       {/* Bottom Sticky Navigation */}
-      <BottomNav />
+      <BottomNav isAdmin={isAdmin} />
     </div>
   );
 }
