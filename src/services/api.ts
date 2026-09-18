@@ -428,6 +428,8 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     },
     wheat: {
       plots: wheatPlots,
+      plot_count: plotCount,
+      plots_unlocked: plotCount,
       granary_used: Number(rawWheat.wheat) || 0,
       granary_max: Number(rawWheat.capacity) || (plotCount * 100 + (Number(rawWheat.silos) || 0) * 500) || 500,
       total_harvested: Number(rawWheat.wheat) || 0,
@@ -618,6 +620,12 @@ export async function executeAction(
     const amt = Number(params.amount) || 0;
     pythonAction = "bank_withdraw";
     pythonPayload.amount = amt;
+  } else if (actionName === "bank_renew") {
+    pythonAction = "bank_renew";
+  } else if (actionName === "collect_business" || actionName === "business_collect") {
+    pythonAction = "collect_business";
+  } else if (actionName === "buy_wheat_plot") {
+    pythonAction = "buy_wheat_plot";
   } else if (actionName === "take_loan" || actionName === "bank_loan") {
     const amt = Number(params.amount) || 0;
     pythonAction = "take_loan";
@@ -739,4 +747,37 @@ export async function fetchMarketplace(): Promise<any[]> {
   }
   const data = await res.json();
   return Array.isArray(data?.listings) ? data.listings : [];
+}
+
+export interface BankRollbackCandidate {
+  user_id: number;
+  name: string;
+  current_balance: number;
+  target_balance: number;
+  correction: number;
+  deposit: number;
+  first_withdrawal_id: number;
+  first_withdrawal_at: string;
+  already_applied: boolean;
+}
+
+export async function fetchBankRollbacks(): Promise<BankRollbackCandidate[]> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка адмін-панелі", res.status);
+  return Array.isArray(data.rollbacks) ? data.rollbacks : [];
+}
+
+export async function applyBankRollback(userId: number): Promise<BankRollbackCandidate> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks/${userId}`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка відкату", res.status);
+  return data.rollback;
 }
