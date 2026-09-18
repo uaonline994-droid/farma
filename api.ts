@@ -272,55 +272,19 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
 
   // 6. Bank A-11 & Bot Deposits Sync
   const rawBank = state?.bank || rawEcon.bank || rawFarm.bank || {};
-  let localBank = { deposit: 0, loan: 0, safe_balance: 0, bonds: 0 };
-  let localDepositsList: any[] = [];
-
-  if (typeof window !== "undefined") {
-    try {
-      const savedBank = localStorage.getItem("farmer_bank_a11");
-      if (savedBank) localBank = JSON.parse(savedBank);
-      const savedDeps = localStorage.getItem("farmer_active_deposits");
-      if (savedDeps) localDepositsList = JSON.parse(savedDeps);
-    } catch {}
-  }
-
-  // Parse total deposit from all possible Python bot SQLite fields
-  const botDepositTotal =
-    Number(
-      rawBank.deposit ??
-        state.deposit ??
-        rawFarm.deposit ??
-        rawEcon.deposit ??
-        state.bank_deposit ??
-        rawFarm.bank_deposit ??
-        rawEcon.bank_deposit ??
-        state.user_deposit
-    ) || 0;
-
-  const bankDeposit = Math.max(botDepositTotal, localBank.deposit);
+  const bankDeposit = Number(rawBank.deposit) || 0;
 
   const bankLoan =
     Number(
-      rawBank.loan ??
-        state.loan ??
-        rawFarm.loan ??
-        rawEcon.loan ??
-        state.bank_loan ??
-        localBank.loan
+      rawBank.loan ?? state.loan ?? state.bank_loan
     ) || 0;
 
   const bankSafe =
     Number(
-      rawBank.safe_balance ??
-        rawBank.safe ??
-        state.safe ??
-        rawFarm.safe ??
-        rawEcon.safe ??
-        state.safe_balance ??
-        localBank.safe_balance
+      rawBank.safe_balance ?? rawBank.safe ?? state.safe ?? state.safe_balance
     ) || 0;
 
-  const bankBonds = Number(rawBank.bonds ?? rawEcon.bonds ?? localBank.bonds) || 0;
+  const bankBonds = Number(rawBank.bonds ?? rawEcon.bonds) || 0;
   const loanLimit = levelNum * 20000 + 10000;
 
   // Active deposits list from bot response (if any) or merge with records
@@ -347,13 +311,6 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
       });
     });
   }
-
-  // Add local deposits if any
-  localDepositsList.forEach((ld) => {
-    if (!activeDeposits.some((ad) => ad.id === ld.id)) {
-      activeDeposits.push(ld);
-    }
-  });
 
   // If there is a bank deposit but list is empty, create the summary item
   if (activeDeposits.length === 0 && bankDeposit > 0) {
@@ -471,6 +428,8 @@ export function transformPythonResponseToGameState(rawState: any): GameState {
     },
     wheat: {
       plots: wheatPlots,
+      plot_count: plotCount,
+      plots_unlocked: plotCount,
       granary_used: Number(rawWheat.wheat) || 0,
       granary_max: Number(rawWheat.capacity) || (plotCount * 100 + (Number(rawWheat.silos) || 0) * 500) || 500,
       total_harvested: Number(rawWheat.wheat) || 0,
@@ -661,6 +620,12 @@ export async function executeAction(
     const amt = Number(params.amount) || 0;
     pythonAction = "bank_withdraw";
     pythonPayload.amount = amt;
+  } else if (actionName === "bank_renew") {
+    pythonAction = "bank_renew";
+  } else if (actionName === "collect_business" || actionName === "business_collect") {
+    pythonAction = "collect_business";
+  } else if (actionName === "buy_wheat_plot") {
+    pythonAction = "buy_wheat_plot";
   } else if (actionName === "take_loan" || actionName === "bank_loan") {
     const amt = Number(params.amount) || 0;
     pythonAction = "take_loan";
@@ -727,7 +692,7 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
 
   const data = await res.json();
   if (data && Array.isArray(data.leaderboard)) {
-    const currentId = Number(getSavedTelegramId()) || (getTelegramUser() ? getTelegramUser()?.id : 0);
+    const currentId: number = Number(getSavedTelegramId()) || Number(getTelegramUser()?.id || 0);
 
     const items = data.leaderboard.map((item: any) => {
       const isSelf = currentId > 0 && item.user_id === currentId;
@@ -768,4 +733,50 @@ export async function fetchLeaderboard(): Promise<LeaderboardResponse> {
   }
 
   return { leaderboard: [] };
+}
+
+export async function fetchMarketplace(): Promise<any[]> {
+  const res = await fetch(`${getBaseUrl()}/api/marketplace`, {
+    method: "GET",
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const errData = await res.json().catch(() => ({}));
+    throw new ApiError(errData.error || `Помилка маркетплейсу: HTTP ${res.status}`, res.status);
+  }
+  const data = await res.json();
+  return Array.isArray(data?.listings) ? data.listings : [];
+}
+
+export interface BankRollbackCandidate {
+  user_id: number;
+  name: string;
+  current_balance: number;
+  target_balance: number;
+  correction: number;
+  first_withdrawal_id: number;
+  first_withdrawal_at: string;
+  already_applied: boolean;
+}
+
+export async function fetchBankRollbacks(): Promise<BankRollbackCandidate[]> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка адмін-панелі", res.status);
+  return Array.isArray(data.rollbacks) ? data.rollbacks : [];
+}
+
+export async function applyBankRollback(userId: number): Promise<BankRollbackCandidate> {
+  const res = await fetch(`${getBaseUrl()}/api/admin/bank-rollbacks/${userId}`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({}),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new ApiError(data.error || "Помилка відкату", res.status);
+  return data.rollback;
 }
