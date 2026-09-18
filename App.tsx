@@ -75,9 +75,10 @@ function AdminRollbackPanel() {
             <div>
               <strong>{item.name}</strong> <span className="text-red-300">({item.user_id})</span>
               <div className="text-red-200">{item.current_balance.toLocaleString()} → {item.target_balance.toLocaleString()} 🪙</div>
-              <div className="text-red-300">Корекція: {item.correction.toLocaleString()} 🪙 · зняття #{item.first_withdrawal_id}</div>
+              <div className="text-red-300">Корекція: {item.correction.toLocaleString()} 🪙 · депозит: {Number((item as any).deposit || 0).toLocaleString()} 🪙</div>
+              <div className="text-red-300">Перше зняття #{item.first_withdrawal_id}</div>
             </div>
-            <button type="button" onClick={() => rollback(item.user_id)} disabled={loading || item.already_applied || item.correction === 0} className="rounded-lg bg-red-500 px-3 py-2 font-bold text-white disabled:opacity-40">
+            <button type="button" onClick={() => rollback(item.user_id)} disabled={loading || item.already_applied || item.correction >= 0} className="rounded-lg bg-red-500 px-3 py-2 font-bold text-white disabled:opacity-40">
               {item.already_applied ? "Вже виконано" : "Відкотити"}
             </button>
           </div>
@@ -140,7 +141,7 @@ function FarmGame() {
     refetchOnWindowFocus: false,
   });
 
-  const isAdmin = Number(userId || 0) === 7883597300 || Number(authResult?.user_id || 0) === 7883597300;
+  const isAdmin = Number(userId || authResult?.user_id || getTelegramUser()?.id || 0) === 7883597300;
 
   useEffect(() => {
     if (authResult) {
@@ -208,6 +209,7 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
+        {isAdmin && activeTab === "admin" && <AdminRollbackPanel />}
         {isBlockingLoading && !gameState ? (
           <SkeletonLoader />
         ) : blockingError && !gameState ? (
@@ -248,7 +250,6 @@ function FarmGame() {
               )}
               {activeTab === "leaderboard" && <LeaderboardView />}
               {activeTab === "profile" && <ProfileView />}
-              {activeTab === "admin" && isAdmin && <AdminRollbackPanel />}
             </motion.div>
           </AnimatePresence>
         )}
