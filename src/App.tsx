@@ -74,11 +74,11 @@ function AdminRollbackPanel() {
           <div key={item.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300/30 bg-black/20 p-3 text-xs">
             <div>
               <strong>{item.name}</strong> <span className="text-red-300">({item.user_id})</span>
-              <div className="text-red-200">{item.current_balance.toLocaleString()} → {item.target_balance.toLocaleString()} 🪙</div>
+              <div className="text-red-200">{item.current_balance.toLocaleString()} → {item.target_balance == null ? "невідомо" : item.target_balance.toLocaleString()} 🪙</div>
               <div className="text-red-300">Корекція: {item.correction.toLocaleString()} 🪙 · депозит: {Number((item as any).deposit || 0).toLocaleString()} 🪙</div>
-              <div className="text-red-300">Перше зняття #{item.first_withdrawal_id}</div>
+              <div className="text-red-300">{item.baseline_available ? `Перше зняття #${item.first_withdrawal_id}` : "Немає балансу до першого зняття в старому логу"}</div>
             </div>
-            <button type="button" onClick={() => rollback(item.user_id)} disabled={loading || item.already_applied || item.correction >= 0} className="rounded-lg bg-red-500 px-3 py-2 font-bold text-white disabled:opacity-40">
+            <button type="button" onClick={() => rollback(item.user_id)} disabled={loading || item.already_applied || !item.baseline_available || item.correction >= 0} className="rounded-lg bg-red-500 px-3 py-2 font-bold text-white disabled:opacity-40">
               {item.already_applied ? "Вже виконано" : "Відкотити"}
             </button>
           </div>
