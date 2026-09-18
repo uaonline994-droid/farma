@@ -143,6 +143,8 @@ export interface WheatPlot {
 
 export interface WheatState {
   plots: WheatPlot[];
+  plot_count?: number;
+  plots_unlocked?: number;
   granary_used: number;
   granary_max: number;
   total_harvested: number;
