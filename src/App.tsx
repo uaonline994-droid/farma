@@ -1,7 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useQuery, useMutation, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { initTelegramApp, getTelegramInitData, getTelegramUser } from "./services/telegram";
-import { fetchGameStateWithUser, executeAction, authenticateTelegramUser, keepBackendAwake } from "./services/api";
+import { fetchGameStateWithUser, executeAction, authenticateTelegramUser, keepBackendAwake, fetchBankRollbacks, applyBankRollback, BankRollbackCandidate } from "./services/api";
 import { useGameStore } from "./store/gameStore";
 import { Header } from "./components/ui/Header";
 import { BottomNav } from "./components/ui/BottomNav";
@@ -28,6 +28,66 @@ const queryClient = new QueryClient({
   },
 });
 
+function AdminRollbackPanel() {
+  const [items, setItems] = useState<BankRollbackCandidate[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      setItems(await fetchBankRollbacks());
+    } catch (err: any) {
+      setError(err.message || "Не вдалося завантажити відкат");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  const rollback = async (userId: number) => {
+    if (!window.confirm("Відкотити баланс до стану після першого зняття депозиту?")) return;
+    setLoading(true);
+    try {
+      await applyBankRollback(userId);
+      await load();
+    } catch (err: any) {
+      setError(err.message || "Не вдалося виконати відкат");
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="mb-4 rounded-2xl border-2 border-red-400/60 bg-red-950/40 p-4 text-red-50">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="font-bold text-red-200">Адмін: відкат балансів</h2>
+        <button type="button" onClick={load} disabled={loading} className="rounded-lg border border-red-300 px-3 py-1 text-xs disabled:opacity-50">Оновити</button>
+      </div>
+      {error && <p className="mb-2 text-xs text-red-300">{error}</p>}
+      {items.length === 0 && !loading && <p className="text-xs text-red-200">Безпечних кандидатів для відкату не знайдено.</p>}
+      <div className="flex flex-col gap-2">
+        {items.map((item) => (
+          <div key={item.user_id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-red-300/30 bg-black/20 p-3 text-xs">
+            <div>
+              <strong>{item.name}</strong> <span className="text-red-300">({item.user_id})</span>
+              <div className="text-red-200">{item.current_balance.toLocaleString()} → {item.target_balance.toLocaleString()} 🪙</div>
+              <div className="text-red-300">Корекція: {item.correction.toLocaleString()} 🪙 · депозит: {Number((item as any).deposit || 0).toLocaleString()} 🪙</div>
+              <div className="text-red-300">Перше зняття #{item.first_withdrawal_id}</div>
+            </div>
+            <button type="button" onClick={() => rollback(item.user_id)} disabled={loading || item.already_applied || item.correction >= 0} className="rounded-lg bg-red-500 px-3 py-2 font-bold text-white disabled:opacity-40">
+              {item.already_applied ? "Вже виконано" : "Відкотити"}
+            </button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function FarmGame() {
   const {
     activeTab,
@@ -37,6 +97,7 @@ function FarmGame() {
     setGameState,
     addToast,
     gameState,
+    userId,
   } = useGameStore();
 
   useEffect(() => {
@@ -79,6 +140,8 @@ function FarmGame() {
     staleTime: Infinity,
     refetchOnWindowFocus: false,
   });
+
+  const isAdmin = Number(userId || authResult?.user_id || getTelegramUser()?.id || 0) === 7883597300;
 
   useEffect(() => {
     if (authResult) {
@@ -146,6 +209,7 @@ function FarmGame() {
 
       {/* Main Content Area */}
       <main className="flex-1 w-full max-w-xl mx-auto pt-3 px-2">
+        {isAdmin && activeTab === "admin" && <AdminRollbackPanel />}
         {isBlockingLoading && !gameState ? (
           <SkeletonLoader />
         ) : blockingError && !gameState ? (
@@ -192,7 +256,7 @@ function FarmGame() {
       </main>
 
       {/* Bottom Sticky Navigation */}
-      <BottomNav />
+      <BottomNav isAdmin={isAdmin} />
     </div>
   );
 }
